@@ -15,6 +15,21 @@
         font-family: Helvetica Neue, Arial, sans-serif;
     }
 
+    /* 🪟 OKNO */
+    #window {
+        border: 12px solid black;
+        padding: 60px 80px;
+        box-sizing: border-box;
+
+        width: 70vw;
+        height: 50vh;
+
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    /* TEXT */
     #text {
         font-size: 5vw;
         font-weight: bold;
@@ -26,7 +41,9 @@
 
 <body>
 
-<div id="text">NAČÍTÁM...</div>
+<div id="window">
+    <div id="text">NAČÍTÁM...</div>
+</div>
 
 <script>
 const LAT = 50.0755;
@@ -50,16 +67,13 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    // 🌧️ srážky mají prioritu
     if (p >= 0.2) return "PRŠÍ";
     if (p > 0.05 && c > 70) return "PŘECHÁZÍ DEŠŤ";
     if (p > 0.5 && c > 80) return "JE BOUŘKA";
     if (t <= 0 && c > 60 && p > 0.05) return "SNĚŽÍ";
 
-    // 🌫️ mlha
     if (c > 90 && t < 8) return "JE MLHA";
 
-    // ☁️ OBLOHA
     let sky = "";
 
     if (c >= 85) sky = "ZATAŽENO";
@@ -68,19 +82,18 @@ function selectText(w) {
     else if (c >= 20) sky = "MÍRNĚ OBLAČNO";
     else sky = "JASNO";
 
-    // 🌡️ TEPLOTA (přirozený jazyk)
     let temp = "";
 
     if (t >= 28) temp = "VEDRO";
     else if (t >= 20) temp = "TEPLO";
     else if (t >= 12) temp = "PŘÍJEMNĚ";
     else if (t >= 5) temp = "CHLADNO";
-    else if (t > 0) temp = "VELMI CHLADNO";
+    else if (t > 0) temp = "KOSA";
     else return "MRZNE";
 
-    // 🎯 VĚTA
     return "JE " + temp + " A " + sky;
 }
+
 const el = document.getElementById("text");
 
 async function showWeather() {
@@ -91,7 +104,7 @@ async function showWeather() {
 }
 
 function showHledim() {
-    el.textContent = "VENKU";
+    el.textContent = "ZA OKNEM";
     setTimeout(showWeather, HLEDIM_DURATION);
 }
 

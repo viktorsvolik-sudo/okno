@@ -12,11 +12,11 @@
         justify-content: center;
         align-items: center;
         height: 100vh;
-        font-family: Helvetica, Arial, sans-serif;
+        font-family: Helvetica Neue, Arial, sans-serif;
     }
 
     #text {
-        font-size: 8vw;
+        font-size: 5vw;
         font-weight: bold;
         color: black;
         text-align: center;
@@ -78,7 +78,7 @@ async function showWeather() {
 }
 
 function showHledim() {
-    el.textContent = "HLEDÍM...";
+    el.textContent = "VENKU";
     setTimeout(showWeather, HLEDIM_DURATION);
 }
 

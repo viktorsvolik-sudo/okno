@@ -50,14 +50,23 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    if (p > 0.3) return "PRŠÍ";
+    // 🌧️ rain (more realistic threshold)
+    if (p > 0.1) return "PRŠÍ";
+
+    // ❄️ snow
     if (t <= 0 && c > 60) return "SNĚŽÍ";
-    if (p > 0.8) return "JE BOUŘKA";
+
+    // ⛈️ storm
+    if (p > 0.5) return "JE BOUŘKA";
+
+    // 🌫️ fog
     if (c > 85 && t < 10) return "JE MLHA";
 
-    if (c > 50) return t > 20 ? "JE OBLAČNO" : "JE ZATAŽENO";
+    // ☁️ clouds
+    if (c > 60) return t > 20 ? "JE OBLAČNO" : "JE ZATAŽENO";
 
-    if (c < 30) {
+    // ☀️ clear sky
+    if (c < 40) {
         if (t >= 25) return "JE VEDRO";
         if (t >= 15) return "JE HEZKY";
         return "JE CHLADNO ALE SLUNEČNO";

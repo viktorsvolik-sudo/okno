@@ -17,32 +17,16 @@
 
     /* 🪟 OKNO */
 #window {
-    border: 5px solid black;
+    border: 7px solid black;
     padding: 60px 80px;
     box-sizing: border-box;
 
     width: 60vmin;
-    height: 60vmin;
+    height: 80vmin;
 
     display: flex;
     justify-content: center;
     align-items: center;
-
-    position: relative; /* důležité */
-}
-/* 🪟 svislá příčka */
-#window::after {
-    content: "";
-    position: absolute;
-
-    width: 4px;
-    height: 100%;
-
-    background: black;
-
-    left: 50%;
-    top: 0;
-    transform: translateX(-50%);
 }
     /* TEXT */
     #text {

@@ -16,19 +16,34 @@
     }
 
     /* 🪟 OKNO */
- #window {
+#window {
     border: 5px solid black;
-    padding: 50px 80px;
+    padding: 60px 80px;
     box-sizing: border-box;
 
-    width: 75vmin;
-    height: 95vmin;
+    width: 60vmin;
+    height: 60vmin;
 
     display: flex;
     justify-content: center;
     align-items: center;
-}
 
+    position: relative; /* důležité */
+}
+/* 🪟 svislá příčka */
+#window::after {
+    content: "";
+    position: absolute;
+
+    width: 4px;
+    height: 100%;
+
+    background: black;
+
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+}
     /* TEXT */
     #text {
         font-size: 5vw;

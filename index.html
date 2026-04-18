@@ -50,33 +50,37 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    // 🌧️ rain (more realistic threshold)
-    if (p > 0.1) return "PRŠÍ";
+    // 🌧️ srážky mají prioritu
+    if (p >= 0.2) return "PRŠÍ";
+    if (p > 0.05 && c > 70) return "PŘECHÁZÍ DEŠŤ";
+    if (p > 0.5 && c > 80) return "JE BOUŘKA";
+    if (t <= 0 && c > 60 && p > 0.05) return "SNĚŽÍ";
 
-    // ❄️ snow
-    if (t <= 0 && c > 60) return "SNĚŽÍ";
+    // 🌫️ mlha
+    if (c > 90 && t < 8) return "JE MLHA";
 
-    // ⛈️ storm
-    if (p > 0.5) return "JE BOUŘKA";
+    // ☁️ OBLOHA
+    let sky = "";
 
-    // 🌫️ fog
-    if (c > 85 && t < 10) return "JE MLHA";
+    if (c >= 85) sky = "ZATAŽENO";
+    else if (c >= 65) sky = "OBLAČNO";
+    else if (c >= 45) sky = "POLOJASNO";
+    else if (c >= 20) sky = "MÍRNĚ OBLAČNO";
+    else sky = "JASNO";
 
-    // ☁️ clouds
-    if (c > 60) return t > 20 ? "JE OBLAČNO" : "JE ZATAŽENO";
+    // 🌡️ TEPLOTA (přirozený jazyk)
+    let temp = "";
 
-    // ☀️ clear sky
-    if (c < 40) {
-        if (t >= 25) return "JE VEDRO";
-        if (t >= 15) return "JE HEZKY";
-        return "JE CHLADNO ALE SLUNEČNO";
-    }
+    if (t >= 28) temp = "VEDRO";
+    else if (t >= 20) temp = "TEPLO";
+    else if (t >= 12) temp = "PŘÍJEMNĚ";
+    else if (t >= 5) temp = "CHLADNO";
+    else if (t > 0) temp = "VELMI CHLADNO";
+    else return "MRZNE";
 
-    if (t <= 0) return "MRZNE";
-
-    return Math.round(t) + "°C";
+    // 🎯 VĚTA
+    return "JE " + temp + " A " + sky;
 }
-
 const el = document.getElementById("text");
 
 async function showWeather() {

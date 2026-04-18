@@ -78,7 +78,7 @@ function selectText(w) {
     else if (t >= 20) temp = "TEPLO";
     else if (t >= 12) temp = "PŘÍJEMNĚ";
     else if (t >= 5) temp = "CHLADNO";
-    else if (t > 0) temp = "KOSA";
+    else if (t > 0) temp = "VELMI CHLADNO";
     else return "MRZNE";
 
     // 🎯 finální věta (FIXED)
@@ -95,7 +95,7 @@ async function showWeather() {
 }
 
 function showHledim() {
-    el.textContent = "ZA OKNEM";
+    el.textContent = "VENKU";
     setTimeout(showWeather, HLEDIM_DURATION);
 }
 

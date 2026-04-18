@@ -34,8 +34,7 @@
 
 <script>
 const LAT = 50.107109;
-const LON = 14.447331
-;
+const LON = 14.447331;
 
 const FETCH_INTERVAL = 40000;
 const HLEDIM_DURATION = 10000;
@@ -47,6 +46,8 @@ async function getWeather() {
     const data = await res.json();
     return data.current;
 }
+
+// 🌗 DEN / NOC
 function updateDayNight() {
     const now = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" });
     const hour = new Date(now).getHours();
@@ -54,14 +55,17 @@ function updateDayNight() {
     const isDay = hour >= 6 && hour < 20;
 
     if (isDay) {
-        document.body.style.background = "white";
-        document.body.style.color = "black";
-        el.style.color = "black";
+        document.body.style.background = "#f5f5f5";
+        document.body.style.color = "#0a0a0a";
+        el.style.color = "#0a0a0a";
     } else {
-        document.body.style.background = "black";
-        document.body.style.color = "white";
-        el.style.color = "white";
+        document.body.style.background = "#0a0a0a";
+        document.body.style.color = "#f5f5f5";
+        el.style.color = "#f5f5f5";
     }
+}
+
+// 🌦️ TEXT LOGIKA
 function selectText(w) {
     if (!w) return "CHYBA POČASÍ";
 
@@ -97,14 +101,14 @@ function selectText(w) {
     else if (t > 0) temp = "VELMI CHLADNO";
     else return "MRZNE";
 
-    // 🎯 finální věta (FIXED)
     return "JE " + temp + " A " + sky;
 }
 
 const el = document.getElementById("text");
 
+// 🔁 CYKLUS
 async function showWeather() {
-    updateDayNight();  // ← přidat sem
+    updateDayNight();
 
     const weather = await getWeather();
     el.textContent = selectText(weather);
@@ -113,13 +117,13 @@ async function showWeather() {
 }
 
 function showHledim() {
-    updateDayNight();  // ← i sem
+    updateDayNight();
 
     el.textContent = "VENKU";
     setTimeout(showWeather, HLEDIM_DURATION);
 }
+
 showWeather();
 </script>
-
 </body>
 </html>

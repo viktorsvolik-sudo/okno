@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Počasí Projekce</title>
+
+<style>
+    body {
+        margin: 0;
+        background: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: "Futura", "Helvetica", sans-serif;
+    }
+
+    #text {
+        font-size: 8vw;
+        font-weight: bold;
+        color: black;
+        text-align: center;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="text">NAČÍTÁM...</div>
+
+<script>
+const LAT = 50.0755;
+const LON = 14.4378;
+
+const FETCH_INTERVAL = 60000;   // 60s total cycle
+const HLEDIM_DURATION = 10000;  // 10s
+
+async function getWeather() {
+    try {
+        const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
+        );
+        const data = await res.json();
+        return data.current;
+    } catch (e) {
+        console.log("Weather error:", e);
+        return null;
+    }
+}
+
+function selectText(w) {
+    if (!w) return "CHYBA POČASÍ";
+
+    const t = w.temperature_2m;
+    const p = w.precipitation;
+    const c = w.cloudcover;
+
+    if (p > 0.3) return "PRŠÍ";
+    if (t <= 0 && c > 60) return "SNĚŽÍ";
+    if (p > 0.8) return "JE BOUŘKA";
+    if (c > 85 && t < 10) return "JE MLHA";
+
+    if (c > 50) return t > 20 ? "JE OBLAČNO" : "JE ZATAŽENO";
+
+    if (c < 30) {
+        if (t >= 25) return "JE VEDRO";
+        if (t >= 15) return "JE HEZKY";
+        return "JE CHLADNO ALE SLUNEČNO";
+    }
+
+    if (t <= 0) return "MRZNE";
+
+    return Math.round(t) + "°C";
+}
+
+const el = document.getElementById("text");
+
+async function showWeather() {
+    const weather = await getWeather();
+    el.textContent = selectText(weather);
+
+    // show weather for ~50s
+    setTimeout(showHledim, FETCH_INTERVAL - HLEDIM_DURATION);
+}
+
+function showHledim() {
+    el.textContent = "HLEDÍM...";
+
+    // show hledím for 10s
+    setTimeout(showWeather, HLEDIM_DURATION);
+}
+
+// start
+showWeather();
+</script>
+
+</body>
+</html>

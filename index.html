@@ -15,29 +15,22 @@ body {
     height: 100vh;
     font-family: Helvetica Neue, Arial, sans-serif;
     transition: background 2s ease, color 2s ease;
-    touch-action: none;
+    flex-direction: column; /* 🔥 důležité */
 }
 
-/* 🌐 MAIN TEXT */
-#text {
+/* 🔝 VENKU + TEXT jako blok */
+#container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+/* 📌 stejné písmo i velikost */
+.line {
     font-size: 5vw;
     font-weight: 500;
-    text-align: center;
-    z-index: 2;
-}
-
-/* 📌 FIXNÍ STATUS (VENKU) */
-#status {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 18px;
-    letter-spacing: 2px;
-    opacity: 0.6;
-    font-weight: 400;
-    z-index: 10;
-    pointer-events: none;
+    line-height: 1.1;
 }
 
 /* 🌧️ rain */
@@ -48,7 +41,7 @@ body {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 1;
+    z-index: 0;
 }
 </style>
 </head>
@@ -57,9 +50,9 @@ body {
 
 <canvas id="rain"></canvas>
 
-<div id="status">VENKU</div>
-<div id="window">
-    <div id="text">NAČÍTÁM...</div>
+<div id="container">
+    <div id="status" class="line">VENKU</div>
+    <div id="text" class="line">NAČÍTÁM...</div>
 </div>
 
 <script>
@@ -80,9 +73,12 @@ let weatherTimer = null;
 // TEST DATA
 // =========================
 const testStates = [
-    { name: "DEN - VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
-    { name: "DEN - POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50, isDay: true },
-    { name: "NOC - PRŠÍ", temperature_2m: 6, precipitation: 1.2, cloudcover: 95, isDay: false }
+    { name: "VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
+    { name: "TEPLO POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50, isDay: true },
+    { name: "ZATAŽENO", temperature_2m: 8, precipitation: 0, cloudcover: 90, isDay: true },
+    { name: "PRŠÍ", temperature_2m: 18, precipitation: 1.5, cloudcover: 90, isDay: true },
+
+    { name: "NOC CHLADNO", temperature_2m: 5, precipitation: 0, cloudcover: 80, isDay: false },
 ];
 
 let testIndex = 0;
@@ -112,12 +108,15 @@ function updateDayNight(w) {
     }
 
     document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
-    el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
-    status.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
+
+    const color = isDay ? "#0a0a0a" : "#f5f5f5";
+
+    el.style.color = color;
+    status.style.color = color;
 }
 
 // =========================
-// TEXT
+// TEXT LOGIC
 // =========================
 function selectText(w) {
     const t = w.temperature_2m;
@@ -146,81 +145,6 @@ function selectText(w) {
 }
 
 // =========================
-// DEBUG
-// =========================
-function showDebug(w, name) {
-    let debug = document.getElementById("debug");
-
-    if (!debug) {
-        debug = document.createElement("div");
-        debug.id = "debug";
-        debug.style.position = "fixed";
-        debug.style.bottom = "10px";
-        debug.style.left = "10px";
-        debug.style.fontSize = "12px";
-        debug.style.fontFamily = "monospace";
-        debug.style.opacity = "0.5";
-        document.body.appendChild(debug);
-    }
-
-    debug.innerHTML =
-        `<b>${name || "LIVE"}</b><br>` +
-        `T: ${w.temperature_2m} | P: ${w.precipitation} | C: ${w.cloudcover}`;
-}
-
-// =========================
-// RAIN (simple)
-// =========================
-const canvas = document.getElementById("rain");
-const ctx = canvas.getContext("2d");
-
-let drops = [];
-let raining = false;
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
-
-function createRain() {
-    drops = [];
-    for (let i = 0; i < 60; i++) {
-        drops.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            speed: Math.random() * 4 + 3,
-            length: Math.random() * 15 + 10
-        });
-    }
-}
-
-function drawRain() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (raining) {
-        ctx.strokeStyle = document.body.style.background === "rgb(10, 10, 10)" ? "#fff" : "#000";
-        ctx.lineWidth = 1;
-
-        for (let d of drops) {
-            ctx.beginPath();
-            ctx.moveTo(d.x, d.y);
-            ctx.lineTo(d.x + 1, d.y + d.length);
-            ctx.stroke();
-
-            d.y += d.speed;
-            if (d.y > canvas.height) {
-                d.y = -20;
-                d.x = Math.random() * canvas.width;
-            }
-        }
-    }
-
-    requestAnimationFrame(drawRain);
-}
-
-// =========================
 // LOOP
 // =========================
 async function runCycle() {
@@ -239,12 +163,8 @@ async function runCycle() {
 
     updateDayNight(weather);
 
+    status.textContent = "VENKU";   // 🔥 FIXNÍ
     el.textContent = selectText(weather);
-    showDebug(weather, name);
-
-    raining = weather.precipitation >= 0.1;
-
-    if (raining) createRain();
 
     isUpdating = false;
 
@@ -272,7 +192,6 @@ document.addEventListener("keydown", (e) => {
 // START
 // =========================
 runCycle();
-drawRain();
 
 </script>
 

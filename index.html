@@ -15,45 +15,19 @@ body {
     height: 100vh;
     font-family: Helvetica Neue, Arial, sans-serif;
     transition: background 2s ease, color 2s ease;
-    flex-direction: column; /* 🔥 důležité */
 }
 
-/* 🔝 VENKU + TEXT jako blok */
-#container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-}
-
-/* 📌 stejné písmo i velikost */
-.line {
+#text {
     font-size: 5vw;
     font-weight: 500;
-    line-height: 1.1;
-}
-
-/* 🌧️ rain */
-#rain {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 0;
+    text-align: center;
 }
 </style>
 </head>
 
 <body>
 
-<canvas id="rain"></canvas>
-
-<div id="container">
-    <div id="status" class="line">VENKU</div>
-    <div id="text" class="line">NAČÍTÁM...</div>
-</div>
+<div id="text">NAČÍTÁM...</div>
 
 <script>
 
@@ -64,24 +38,20 @@ const FETCH_INTERVAL = 50000;
 const TEST_MODE = true;
 
 const el = document.getElementById("text");
-const status = document.getElementById("status");
 
-let isUpdating = false;
-let weatherTimer = null;
+let testIndex = 0;
+let timer = null;
 
 // =========================
 // TEST DATA
 // =========================
 const testStates = [
-    { name: "VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
-    { name: "TEPLO POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50, isDay: true },
-    { name: "ZATAŽENO", temperature_2m: 8, precipitation: 0, cloudcover: 90, isDay: true },
-    { name: "PRŠÍ", temperature_2m: 18, precipitation: 1.5, cloudcover: 90, isDay: true },
-
-    { name: "NOC CHLADNO", temperature_2m: 5, precipitation: 0, cloudcover: 80, isDay: false },
+    { temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
+    { temperature_2m: 22, precipitation: 0, cloudcover: 50, isDay: true },
+    { temperature_2m: 8, precipitation: 0, cloudcover: 90, isDay: true },
+    { temperature_2m: 18, precipitation: 1.5, cloudcover: 90, isDay: true },
+    { temperature_2m: 5, precipitation: 0, cloudcover: 80, isDay: false }
 ];
-
-let testIndex = 0;
 
 // =========================
 // WEATHER
@@ -108,11 +78,7 @@ function updateDayNight(w) {
     }
 
     document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
-
-    const color = isDay ? "#0a0a0a" : "#f5f5f5";
-
-    el.style.color = color;
-    status.style.color = color;
+    el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
 }
 
 // =========================
@@ -145,53 +111,48 @@ function selectText(w) {
 }
 
 // =========================
-// LOOP
+// MAIN LOOP (FIXED)
 // =========================
-async function runCycle() {
-    if (isUpdating) return;
-    isUpdating = true;
+async function run() {
 
-    let weather;
-    let name = "";
+    let w;
 
     if (TEST_MODE) {
-        weather = testStates[testIndex];
-        name = weather.name;
+        w = testStates[testIndex];
     } else {
-        weather = await getWeather();
+        w = await getWeather();
     }
 
-    updateDayNight(weather);
+    updateDayNight(w);
 
-    status.textContent = "VENKU";   // 🔥 FIXNÍ
-    el.textContent = selectText(weather);
+    // 🔥 FIX: VENKU vždy na začátku řádku
+    el.textContent = "VENKU " + selectText(w);
 
-    isUpdating = false;
-
-    weatherTimer = setTimeout(runCycle, FETCH_INTERVAL);
+    clearTimeout(timer);
+    timer = setTimeout(run, FETCH_INTERVAL);
 }
 
 // =========================
-// CONTROLS
+// CONTROLS (TEST MODE)
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
 
     if (e.key === "ArrowRight") {
         testIndex = (testIndex + 1) % testStates.length;
-        runCycle();
+        run();
     }
 
     if (e.key === "ArrowLeft") {
         testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-        runCycle();
+        run();
     }
 });
 
 // =========================
 // START
 // =========================
-runCycle();
+run();
 
 </script>
 

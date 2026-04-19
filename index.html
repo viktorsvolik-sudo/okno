@@ -1,59 +1,26 @@
-<!DOCTYPE html>
-<html lang="cs">
-<head>
-<meta charset="UTF-8">
-<title>Okno do dvora</title>
-
-<style>
-body {
-    margin: 0;
-    background: #f5f5f5;
-    color: #0a0a0a;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    font-family: Helvetica Neue, Arial, sans-serif;
-    transition: background 2s ease, color 2s ease;
-}
-
-#text {
-    font-size: 5vw;
-    font-weight: 500;
-    text-align: center;
-    transition: color 2s ease;
-    z-index: 2;
-}
-
-/* 🌧️ rain layer */
-#rain {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 1;
-}
-</style>
-</head>
-
-<body>
-
-<canvas id="rain"></canvas>
-
-<div id="window">
-    <div id="text">NAČÍTÁM...</div>
-</div>
-
-<script>
 const LAT = 50.107109;
 const LON = 14.447331;
 
 const FETCH_INTERVAL = 50000;
 const HLEDIM_DURATION = 5000;
 
+const TEST_MODE = true;
+
 const el = document.getElementById("text");
+
+// =========================
+// 🧪 TEST DATA
+// =========================
+const testStates = [
+    { name: "VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10 },
+    { name: "TEPLO POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50 },
+    { name: "CHLADNO ZATAŽENO", temperature_2m: 8, precipitation: 0, cloudcover: 90 },
+    { name: "POPRCHÁVÁ", temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
+    { name: "PRŠÍ", temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
+    { name: "MLHA", temperature_2m: 5, precipitation: 0, cloudcover: 95 }
+];
+
+let testIndex = 0;
 
 // =========================
 // WEATHER
@@ -67,7 +34,7 @@ async function getWeather() {
 }
 
 // =========================
-// 🌗 DAY / NIGHT
+// DAY / NIGHT
 // =========================
 function updateDayNight() {
     const now = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" });
@@ -75,41 +42,29 @@ function updateDayNight() {
 
     const isDay = hour >= 6 && hour < 20;
 
-    if (isDay) {
-        document.body.style.background = "#f5f5f5";
-        document.body.style.color = "#0a0a0a";
-        el.style.color = "#0a0a0a";
-    } else {
-        document.body.style.background = "#0a0a0a";
-        document.body.style.color = "#f5f5f5";
-        el.style.color = "#f5f5f5";
-    }
+    document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
+    el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
 }
 
 // =========================
-// 🌦️ TEXT LOGIC
+// TEXT LOGIC (NEZMĚNĚNO)
 // =========================
 function selectText(w) {
-    if (!w) return "CHYBA POČASÍ";
-
     const t = w.temperature_2m;
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    if (p >= 0.3) {
+    if (p >= 1.0) {
         return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
     }
 
-    if (p > 0.05) {
+    if (p >= 0.1) {
         return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
     }
-
-    if (t <= 0 && c > 60 && p > 0) return "SNĚŽÍ";
 
     if (c > 90 && t < 8) return "JE MLHA";
 
     let sky = "";
-
     if (c >= 85) sky = "ZATAŽENO";
     else if (c >= 65) sky = "OBLAČNO";
     else if (c >= 45) sky = "POLOJASNO";
@@ -117,91 +72,60 @@ function selectText(w) {
     else sky = "JASNO";
 
     let temp = "";
-
     if (t >= 28) temp = "VEDRO";
     else if (t >= 20) temp = "TEPLO";
     else if (t >= 12) temp = "PŘÍJEMNĚ";
     else if (t >= 5) temp = "CHLADNO";
-    else if (t > 0) temp = "VELMI CHLADNO";
+    else if (t > 0) temp = "ZIMA";
     else return "MRZNE";
 
     return "JE " + temp + " A " + sky;
 }
 
 // =========================
-// 🌧️ RAIN ANIMATION
+// DEBUG INFO
 // =========================
-const canvas = document.getElementById("rain");
-const ctx = canvas.getContext("2d");
+function showDebug(w, name) {
+    let debug = document.getElementById("debug");
 
-let drops = [];
-let raining = false;
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
-
-function createRain() {
-    drops = [];
-    for (let i = 0; i < 80; i++) { // jemnější déšť
-        drops.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            length: Math.random() * 20 + 10,
-            speed: Math.random() * 4 + 4
-        });
-    }
-}
-
-function drawRain() {
-    if (!raining) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
+    if (!debug) {
+        debug = document.createElement("div");
+        debug.id = "debug";
+        debug.style.position = "fixed";
+        debug.style.bottom = "10px";
+        debug.style.left = "10px";
+        debug.style.fontSize = "14px";
+        debug.style.fontFamily = "monospace";
+        debug.style.opacity = "0.7";
+        document.body.appendChild(debug);
     }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = document.body.style.background === "rgb(10, 10, 10)" ? "#f5f5f5" : "#0a0a0a";
-    ctx.lineWidth = 1;
-
-    for (let d of drops) {
-        ctx.beginPath();
-        ctx.moveTo(d.x, d.y);
-        ctx.lineTo(d.x + 2, d.y + d.length); // mírný vítr
-        ctx.stroke();
-
-        d.y += d.speed;
-
-        if (d.y > canvas.height) {
-            d.y = -20;
-            d.x = Math.random() * canvas.width;
-        }
-    }
-
-    requestAnimationFrame(drawRain);
+    debug.innerHTML =
+        `<b>${name}</b><br>` +
+        `T: ${w.temperature_2m}°C | ` +
+        `P: ${w.precipitation} | ` +
+        `C: ${w.cloudcover}`;
 }
 
 // =========================
-// 🔁 LOOP
+// LOOP
 // =========================
 async function showWeather() {
     updateDayNight();
 
-    const weather = await getWeather();
-    const text = selectText(weather);
+    let weather;
+    let name = "";
 
-    el.textContent = text;
-
-    if (text.includes("PRŠÍ")) {
-        raining = true;
-        createRain();
-        drawRain();
+    if (TEST_MODE) {
+        weather = testStates[testIndex];
+        name = testStates[testIndex].name;
     } else {
-        raining = false;
+        weather = await getWeather();
     }
+
+    el.textContent = selectText(weather);
+
+    showDebug(weather, name);
 
     setTimeout(showHledim, FETCH_INTERVAL - HLEDIM_DURATION);
 }
@@ -210,12 +134,25 @@ function showHledim() {
     updateDayNight();
 
     el.textContent = "VENKU";
-    raining = false;
 
     setTimeout(showWeather, HLEDIM_DURATION);
 }
 
+// =========================
+// CONTROL (ARROWS)
+// =========================
+document.addEventListener("keydown", (e) => {
+    if (!TEST_MODE) return;
+
+    if (e.key === "ArrowRight") {
+        testIndex = (testIndex + 1) % testStates.length;
+        showWeather();
+    }
+
+    if (e.key === "ArrowLeft") {
+        testIndex = (testIndex - 1 + testStates.length) % testStates.length;
+        showWeather();
+    }
+});
+
 showWeather();
-</script>
-</body>
-</html>

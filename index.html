@@ -103,9 +103,14 @@ async function getWeather() {
 // =========================
 // DAY / NIGHT
 // =========================
-function updateDayNight(hour) {
+function updateDayNight(hour, weather) {
     const isDay = hour >= 6 && hour < 20;
-    document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
+    const isOvercast = weather.cloudcover >= 85 && weather.precipitation < 0.1;
+
+    document.body.style.background = isDay
+        ? (isOvercast ? "#dddddd" : "#f5f5f5")
+        : "#0a0a0a";
+
     el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
     debugEl.style.color = isDay ? "#555" : "#aaa";
 }
@@ -163,7 +168,7 @@ function render() {
         hour = new Date().getHours();
     }
 
-    updateDayNight(hour);
+    updateDayNight(hour, w);
     el.innerHTML = "VENKU " + selectText(w);
 
     updateRain(w);
@@ -289,7 +294,7 @@ function drawSnow() {
 }
 
 // =========================
-// CONTROLS (FIXED)
+// CONTROLS
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
@@ -318,7 +323,7 @@ document.addEventListener("click", (e) => {
 });
 
 // =========================
-// START (FIXED LOOP)
+// START
 // =========================
 render();
 drawRain();

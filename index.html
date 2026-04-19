@@ -127,9 +127,21 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    if (p >= 1.0) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
-    if (p >= 0.1) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
+    // ❄️ SNÍH (musí být první!)
+    if (t <= 0 && p > 0) {
+        return "MRZNE A SNĚŽÍ";
+    }
 
+    // 🌧️ déšť
+    if (p >= 1.0) {
+        return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
+    }
+
+    if (p >= 0.1) {
+        return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
+    }
+
+    // 🌫️ mlha
     if (c > 90 && t < 8) return "JE MLHA";
 
     let sky =

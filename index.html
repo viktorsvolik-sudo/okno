@@ -21,11 +21,9 @@ body {
     font-size: 5vw;
     font-weight: 500;
     text-align: center;
-    transition: color 2s ease;
     z-index: 2;
 }
 
-/* 🌧️ rain layer */
 #rain {
     position: absolute;
     top: 0;
@@ -57,15 +55,17 @@ const TEST_MODE = true;
 const el = document.getElementById("text");
 
 // =========================
-// TEST DATA
+// 🧪 TEST DATA (NOW WITH DAY/NIGHT)
 // =========================
 const testStates = [
-    { name: "VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10 },
-    { name: "TEPLO POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50 },
-    { name: "CHLADNO ZATAŽENO", temperature_2m: 8, precipitation: 0, cloudcover: 90 },
-    { name: "POPRCHÁVÁ", temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
-    { name: "PRŠÍ", temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
-    { name: "MLHA", temperature_2m: 5, precipitation: 0, cloudcover: 95 }
+    { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10 },
+    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50 },
+    { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90 },
+    { name: "DEN - POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
+    { name: "DEN - PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
+
+    { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10 },
+    { name: "NOC - DEŠŤ", hour: 2, temperature_2m: 6, precipitation: 0.8, cloudcover: 95 }
 ];
 
 let testIndex = 0;
@@ -83,21 +83,9 @@ async function getWeather() {
 }
 
 // =========================
-// DAY / NIGHT
+// DAY / NIGHT (NOW TEST-AWARE)
 // =========================
-function updateDayNight(hourOverride = null) {
-
-    let hour;
-
-    if (hourOverride !== null) {
-        hour = hourOverride; // 🧪 TEST MODE
-    } else {
-        const now = new Date();
-        const prague = new Date(
-            now.toLocaleString("en-US", { timeZone: "Europe/Prague" })
-        );
-        hour = prague.getHours();
-    }
+function updateDayNight(hour) {
 
     const isDay = hour >= 6 && hour < 20;
 
@@ -109,6 +97,7 @@ function updateDayNight(hourOverride = null) {
 // TEXT LOGIC
 // =========================
 function selectText(w) {
+
     const t = w.temperature_2m;
     const p = w.precipitation;
     const c = w.cloudcover;
@@ -125,17 +114,17 @@ function selectText(w) {
         "JASNO";
 
     let temp =
-        t >= 28 ? "JE VEDRO" :
-        t >= 20 ? "JE TEPLO" :
-        t >= 12 ? "JE PŘÍJEMNĚ" :
-        t >= 5  ? "JE CHLADNO" :
+        t >= 28 ? "VEDRO" :
+        t >= 20 ? "TEPLO" :
+        t >= 12 ? "PŘÍJEMNĚ" :
+        t >= 5  ? "CHLADNO" :
         "ZIMA";
 
     return "JE " + temp + " A " + sky;
 }
 
 // =========================
-// RENDER (FIX: VENKU IS ALWAYS PREFIX)
+// RENDER
 // =========================
 function render() {
 
@@ -143,25 +132,26 @@ function render() {
 
     if (TEST_MODE) {
         w = testStates[testIndex];
+
+        // ✅ TEST MODE uses fake hour
+        updateDayNight(w.hour);
+
     } else {
         w = liveWeather;
         if (!w) return;
+
+        // real time
+        const hour = new Date().getHours();
+        updateDayNight(hour);
     }
 
-  if (TEST_MODE) {
-    updateDayNight(testStates[testIndex].hour);
-} else {
-    updateDayNight();
-}
-
-    // ✅ VENKU is now part of same line always
-    el.textContent = "VENKU" + selectText(w);
+    el.textContent = "VENKU JE " + selectText(w);
 
     updateRain(w);
 }
 
 // =========================
-// RAIN (UNCHANGED BUT STABLE)
+// RAIN
 // =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
@@ -223,23 +213,10 @@ function drawRain() {
 }
 
 // =========================
-// LOOP
-// =========================
-async function loop() {
-
-    if (!TEST_MODE) {
-        await getWeather();
-    }
-
-    render();
-
-    setTimeout(loop, FETCH_INTERVAL);
-}
-
-// =========================
-// CONTROLS (TEST MODE)
+// CONTROLS
 // =========================
 document.addEventListener("keydown", (e) => {
+
     if (!TEST_MODE) return;
 
     if (e.key === "ArrowRight") {
@@ -259,7 +236,9 @@ document.addEventListener("keydown", (e) => {
 render();
 drawRain();
 
-if (!TEST_MODE) loop();
+if (!TEST_MODE) {
+    setInterval(getWeather, FETCH_INTERVAL);
+}
 
 </script>
 

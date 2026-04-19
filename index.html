@@ -14,7 +14,7 @@ body {
     align-items: center;
     height: 100vh;
     font-family: Helvetica Neue, Arial, sans-serif;
-    transition: background 2s ease, color 2s ease;
+    transition: background 1.5s ease, color 1.5s ease;
 }
 
 #text {
@@ -40,45 +40,28 @@ const TEST_MODE = true;
 const el = document.getElementById("text");
 
 let testIndex = 0;
-let timer = null;
+let liveWeather = null;
 
 // =========================
-// TEST DATA
+// TEST STATES
 // =========================
 const testStates = [
-    { temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
-    { temperature_2m: 22, precipitation: 0, cloudcover: 50, isDay: true },
-    { temperature_2m: 8, precipitation: 0, cloudcover: 90, isDay: true },
-    { temperature_2m: 18, precipitation: 1.5, cloudcover: 90, isDay: true },
-    { temperature_2m: 5, precipitation: 0, cloudcover: 80, isDay: false }
+    { temperature_2m: 30, precipitation: 0, cloudcover: 10 },
+    { temperature_2m: 22, precipitation: 0, cloudcover: 50 },
+    { temperature_2m: 8, precipitation: 0, cloudcover: 90 },
+    { temperature_2m: 18, precipitation: 0.3, cloudcover: 80 },
+    { temperature_2m: 5, precipitation: 1.2, cloudcover: 95 }
 ];
 
 // =========================
-// WEATHER
+// FETCH WEATHER
 // =========================
 async function getWeather() {
     const res = await fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
     );
     const data = await res.json();
-    return data.current;
-}
-
-// =========================
-// DAY / NIGHT
-// =========================
-function updateDayNight(w) {
-    let isDay;
-
-    if (TEST_MODE && w && w.isDay !== undefined) {
-        isDay = w.isDay;
-    } else {
-        const hour = new Date().getHours();
-        isDay = hour >= 6 && hour < 20;
-    }
-
-    document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
-    el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
+    liveWeather = data.current;
 }
 
 // =========================
@@ -94,65 +77,77 @@ function selectText(w) {
 
     if (c > 90 && t < 8) return "JE MLHA";
 
-    let sky = "";
-    if (c >= 85) sky = "ZATAŽENO";
-    else if (c >= 65) sky = "OBLAČNO";
-    else if (c >= 45) sky = "POLOJASNO";
-    else sky = "JASNO";
+    let sky =
+        c >= 85 ? "ZATAŽENO" :
+        c >= 65 ? "OBLAČNO" :
+        c >= 45 ? "POLOJASNO" :
+        "JASNO";
 
-    let temp = "";
-    if (t >= 28) temp = "VEDRO";
-    else if (t >= 20) temp = "TEPLO";
-    else if (t >= 12) temp = "PŘÍJEMNĚ";
-    else if (t >= 5) temp = "CHLADNO";
-    else temp = "ZIMA";
+    let temp =
+        t >= 28 ? "VEDRO" :
+        t >= 20 ? "TEPLO" :
+        t >= 12 ? "PŘÍJEMNĚ" :
+        t >= 5 ? "CHLADNO" :
+        "ZIMA";
 
     return "JE " + temp + " A " + sky;
 }
 
 // =========================
-// MAIN LOOP (FIXED)
+// RENDER (FIXED)
 // =========================
-async function run() {
+function render() {
 
     let w;
 
     if (TEST_MODE) {
         w = testStates[testIndex];
     } else {
-        w = await getWeather();
+        w = liveWeather;
+        if (!w) return;
     }
 
-    updateDayNight(w);
-
-    // 🔥 FIX: VENKU vždy na začátku řádku
-    el.textContent = "VENKU " + selectText(w);
-
-    clearTimeout(timer);
-    timer = setTimeout(run, FETCH_INTERVAL);
+    el.textContent = "VENKU JE " + selectText(w);
 }
 
 // =========================
-// CONTROLS (TEST MODE)
+// LOOP (ONLY LIVE MODE REFRESH)
+// =========================
+async function loop() {
+
+    if (!TEST_MODE) {
+        await getWeather();
+        render();
+    }
+
+    setTimeout(loop, FETCH_INTERVAL);
+}
+
+// =========================
+// TEST CONTROLS (NO RESTART BUG)
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
 
     if (e.key === "ArrowRight") {
         testIndex = (testIndex + 1) % testStates.length;
-        run();
+        render();
     }
 
     if (e.key === "ArrowLeft") {
         testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-        run();
+        render();
     }
 });
 
 // =========================
 // START
 // =========================
-run();
+if (TEST_MODE) {
+    render();
+} else {
+    loop();
+}
 
 </script>
 

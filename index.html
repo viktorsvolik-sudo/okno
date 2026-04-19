@@ -1,3 +1,52 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Okno do dvora</title>
+
+<style>
+body {
+    margin: 0;
+    background: #f5f5f5;
+    color: #0a0a0a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: Helvetica Neue, Arial, sans-serif;
+    transition: background 2s ease, color 2s ease;
+}
+
+#text {
+    font-size: 5vw;
+    font-weight: 500;
+    text-align: center;
+    transition: color 2s ease;
+    z-index: 2;
+}
+
+/* 🌧️ rain layer */
+#rain {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="rain"></canvas>
+
+<div id="window">
+    <div id="text">NAČÍTÁM...</div>
+</div>
+
+<script>
 const LAT = 50.107109;
 const LON = 14.447331;
 
@@ -23,7 +72,7 @@ const testStates = [
 let testIndex = 0;
 
 // =========================
-// WEATHER
+// WEATHER API
 // =========================
 async function getWeather() {
     const res = await fetch(
@@ -47,7 +96,7 @@ function updateDayNight() {
 }
 
 // =========================
-// TEXT LOGIC (NEZMĚNĚNO)
+// TEXT LOGIC
 // =========================
 function selectText(w) {
     const t = w.temperature_2m;
@@ -83,7 +132,7 @@ function selectText(w) {
 }
 
 // =========================
-// DEBUG INFO
+// DEBUG
 // =========================
 function showDebug(w, name) {
     let debug = document.getElementById("debug");
@@ -97,14 +146,71 @@ function showDebug(w, name) {
         debug.style.fontSize = "14px";
         debug.style.fontFamily = "monospace";
         debug.style.opacity = "0.7";
+        debug.style.color = "gray";
         document.body.appendChild(debug);
     }
 
     debug.innerHTML =
-        `<b>${name}</b><br>` +
+        `<b>${name || "LIVE"}</b><br>` +
         `T: ${w.temperature_2m}°C | ` +
         `P: ${w.precipitation} | ` +
         `C: ${w.cloudcover}`;
+}
+
+// =========================
+// RAIN
+// =========================
+const canvas = document.getElementById("rain");
+const ctx = canvas.getContext("2d");
+
+let drops = [];
+let raining = false;
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+function createRain() {
+    drops = [];
+    for (let i = 0; i < 80; i++) {
+        drops.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            length: Math.random() * 20 + 10,
+            speed: Math.random() * 4 + 4
+        });
+    }
+}
+
+function drawRain() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!raining) {
+        requestAnimationFrame(drawRain);
+        return;
+    }
+
+    ctx.strokeStyle = document.body.style.background === "rgb(10, 10, 10)" ? "#f5f5f5" : "#0a0a0a";
+    ctx.lineWidth = 1;
+
+    for (let d of drops) {
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x + 2, d.y + d.length);
+        ctx.stroke();
+
+        d.y += d.speed;
+
+        if (d.y > canvas.height) {
+            d.y = -20;
+            d.x = Math.random() * canvas.width;
+        }
+    }
+
+    requestAnimationFrame(drawRain);
 }
 
 // =========================
@@ -127,6 +233,15 @@ async function showWeather() {
 
     showDebug(weather, name);
 
+    const shouldRain = weather.precipitation >= 0.1;
+
+    if (shouldRain) {
+        raining = true;
+        createRain();
+    } else {
+        raining = false;
+    }
+
     setTimeout(showHledim, FETCH_INTERVAL - HLEDIM_DURATION);
 }
 
@@ -139,7 +254,7 @@ function showHledim() {
 }
 
 // =========================
-// CONTROL (ARROWS)
+// CONTROLS
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
@@ -155,4 +270,10 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+// START
 showWeather();
+drawRain();
+</script>
+
+</body>
+</html>

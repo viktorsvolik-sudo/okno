@@ -45,10 +45,6 @@ body {
 </div>
 
 <script>
-
-// =========================
-// CONFIG
-// =========================
 const LAT = 50.107109;
 const LON = 14.447331;
 
@@ -57,16 +53,12 @@ const TEST_MODE = true;
 
 const el = document.getElementById("text");
 
-// =========================
-// TEST DATA
-// =========================
 const testStates = [
     { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10 },
     { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50 },
     { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90 },
     { name: "DEN - POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
     { name: "DEN - PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
-
     { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10 },
     { name: "NOC - DEŠŤ", hour: 2, temperature_2m: 6, precipitation: 0.8, cloudcover: 95 }
 ];
@@ -74,9 +66,6 @@ const testStates = [
 let testIndex = 0;
 let liveWeather = null;
 
-// =========================
-// WEATHER FETCH
-// =========================
 async function getWeather() {
     try {
         const res = await fetch(
@@ -85,32 +74,24 @@ async function getWeather() {
         const data = await res.json();
         liveWeather = data.current;
     } catch (e) {
-        console.error("Weather error", e);
+        console.error("Weather error:", e);
+        liveWeather = null;
     }
 }
 
-// =========================
-// DAY / NIGHT
-// =========================
 function updateDayNight(hour) {
     const isDay = hour >= 6 && hour < 20;
-
     document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
     el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
 }
 
-// =========================
-// TEXT LOGIC
-// =========================
 function selectText(w) {
-
     const t = w.temperature_2m;
     const p = w.precipitation;
     const c = w.cloudcover;
 
     if (p >= 1.0) return (t >= 20 ? "JE TEPLO" : "JE CHLADNO") + " A PRŠÍ";
     if (p >= 0.1) return (t >= 20 ? "JE TEPLO" : "JE CHLADNO") + " A POPRCHÁVÁ";
-
     if (c > 90 && t < 8) return "JE MLHA";
 
     let sky =
@@ -123,17 +104,13 @@ function selectText(w) {
         t >= 28 ? "VEDRO" :
         t >= 20 ? "TEPLO" :
         t >= 12 ? "PŘÍJEMNĚ" :
-        t >= 5  ? "CHLADNO" :
+        t >= 5 ? "CHLADNO" :
         "ZIMA";
 
     return "JE " + temp + " A " + sky;
 }
 
-// =========================
-// RENDER
-// =========================
 function render() {
-
     let w;
     let hour;
 
@@ -141,22 +118,19 @@ function render() {
         w = testStates[testIndex];
         hour = w.hour;
     } else {
-        if (!liveWeather) return;
+        if (!liveWeather) {
+            el.textContent = "NAČÍTÁM...";
+            return;
+        }
         w = liveWeather;
         hour = new Date().getHours();
     }
 
     updateDayNight(hour);
-
-    // ✅ správný formát – jeden řádek
-    el.textContent = "VENKU " + selectText(w);
-
+    el.innerHTML = `VENKU ${selectText(w)}`;
     updateRain(w);
 }
 
-// =========================
-// RAIN
-// =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
 
@@ -216,11 +190,7 @@ function drawRain() {
     requestAnimationFrame(drawRain);
 }
 
-// =========================
-// CONTROLS (TEST MODE)
-// =========================
 document.addEventListener("keydown", (e) => {
-
     if (!TEST_MODE) return;
 
     if (e.key === "ArrowRight") {
@@ -234,33 +204,27 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
-// =========================
-// LOOP
-// =========================
 async function loop() {
-
     if (!TEST_MODE) {
         await getWeather();
+        render();
     }
-
-    render();
-
     setTimeout(loop, FETCH_INTERVAL);
 }
 
-// =========================
-// START
-// =========================
-drawRain();
+async function start() {
+    drawRain();
 
-if (TEST_MODE) {
-    render();
-} else {
-    await getWeather();
-    render();
-    loop();
+    if (TEST_MODE) {
+        render();
+    } else {
+        await getWeather();
+        render();
+        loop();
+    }
 }
 
+start();
 </script>
 
 </body>

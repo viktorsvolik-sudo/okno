@@ -47,6 +47,7 @@ body {
 </div>
 
 <script>
+
 const LAT = 50.107109;
 const LON = 14.447331;
 
@@ -57,19 +58,21 @@ const TEST_MODE = true;
 
 const el = document.getElementById("text");
 
-// 🧠 FIX: LOCK proti přebíhání
+// 🧠 lock proti přebíhání
 let isUpdating = false;
 
 // =========================
-// 🧪 TEST DATA
+// 🧪 TEST DATA (DEN + NOC)
 // =========================
 const testStates = [
-    { name: "VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10 },
-    { name: "TEPLO POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50 },
-    { name: "CHLADNO ZATAŽENO", temperature_2m: 8, precipitation: 0, cloudcover: 90 },
-    { name: "POPRCHÁVÁ", temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
-    { name: "PRŠÍ", temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
-    { name: "MLHA", temperature_2m: 5, precipitation: 0, cloudcover: 95 }
+    { name: "DEN - VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
+    { name: "DEN - POLOJASNO", temperature_2m: 22, precipitation: 0, cloudcover: 50, isDay: true },
+    { name: "DEN - ZATAŽENO", temperature_2m: 8, precipitation: 0, cloudcover: 90, isDay: true },
+    { name: "DEN - PRŠÍ", temperature_2m: 18, precipitation: 1.5, cloudcover: 90, isDay: true },
+
+    { name: "NOC - KLID", temperature_2m: 12, precipitation: 0, cloudcover: 20, isDay: false },
+    { name: "NOC - CHLADNO", temperature_2m: 5, precipitation: 0, cloudcover: 90, isDay: false },
+    { name: "NOC - PRŠÍ", temperature_2m: 6, precipitation: 1.2, cloudcover: 95, isDay: false }
 ];
 
 let testIndex = 0;
@@ -86,13 +89,18 @@ async function getWeather() {
 }
 
 // =========================
-// DAY / NIGHT
+// 🌗 DAY / NIGHT (TEST + REAL)
 // =========================
-function updateDayNight() {
-    const now = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" });
-    const hour = new Date(now).getHours();
+function updateDayNight(w) {
+    let isDay;
 
-    const isDay = hour >= 6 && hour < 20;
+    if (TEST_MODE && w && w.isDay !== undefined) {
+        isDay = w.isDay;
+    } else {
+        const now = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" });
+        const hour = new Date(now).getHours();
+        isDay = hour >= 6 && hour < 20;
+    }
 
     document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
     el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
@@ -121,7 +129,7 @@ function selectText(w) {
     else if (c >= 65) sky = "OBLAČNO";
     else if (c >= 45) sky = "POLOJASNO";
     else if (c >= 20) sky = "MÍRNĚ OBLAČNO";
-    else sky = "JASNO";
+    else sky = "SLUNCE SVÍTÍ";
 
     let temp = "";
     if (t >= 28) temp = "VEDRO";
@@ -221,13 +229,11 @@ function drawRain() {
 }
 
 // =========================
-// LOOP (FIXED)
+// LOOP (SAFE)
 // =========================
 async function showWeather() {
     if (isUpdating) return;
     isUpdating = true;
-
-    updateDayNight();
 
     let weather;
     let name = "";
@@ -239,18 +245,14 @@ async function showWeather() {
         weather = await getWeather();
     }
 
-    el.textContent = selectText(weather);
+    updateDayNight(weather);
 
+    el.textContent = selectText(weather);
     showDebug(weather, name);
 
-    const shouldRain = weather.precipitation >= 0.1;
+    raining = weather.precipitation >= 0.1;
 
-    if (shouldRain) {
-        raining = true;
-        createRain();
-    } else {
-        raining = false;
-    }
+    if (raining) createRain();
 
     isUpdating = false;
 
@@ -258,10 +260,7 @@ async function showWeather() {
 }
 
 function showHledim() {
-    updateDayNight();
-
     el.textContent = "VENKU";
-
     setTimeout(showWeather, HLEDIM_DURATION);
 }
 
@@ -285,6 +284,7 @@ document.addEventListener("keydown", (e) => {
 // START
 showWeather();
 drawRain();
+
 </script>
 
 </body>

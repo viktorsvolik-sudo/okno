@@ -15,13 +15,14 @@ body {
     height: 100vh;
     font-family: Helvetica Neue, Arial, sans-serif;
     transition: background 2s ease, color 2s ease;
+    overflow: hidden;
 }
 
 #text {
     font-size: 5vw;
     font-weight: 500;
     text-align: center;
-    z-index: 2;
+    z-index: 3;
 }
 
 #debug {
@@ -31,18 +32,22 @@ body {
     font-size: 14px;
     font-family: monospace;
     opacity: 0.7;
-    transition: color 2s ease;
+    z-index: 4;
 }
 
-#rain, #snow {
+canvas {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 1;
 }
+
+/* vrstvy */
+#rain { z-index: 1; }
+#snow { z-index: 1; }
+#fog  { z-index: 2; }
 </style>
 </head>
 
@@ -50,6 +55,7 @@ body {
 
 <canvas id="rain"></canvas>
 <canvas id="snow"></canvas>
+<canvas id="fog"></canvas>
 
 <div id="window">
     <div id="text">NAČÍTÁM...</div>
@@ -72,12 +78,11 @@ const debugEl = document.getElementById("debug");
 // =========================
 const testStates = [
     { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10, debug: "VEDRO" },
-    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50, debug: "TEPLO + POLOJASNO" },
+    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50, debug: "POLOJASNO" },
     { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90, debug: "ZATAŽENO" },
     { name: "DEN - POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80, debug: "POPRCHÁVÁ" },
     { name: "DEN - PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90, debug: "PRŠÍ" },
-
-    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98, debug: "MLHA" },
+    { name: "MLHA", hour: 7, temperature_2m: 6, precipitation: 0, cloudcover: 95, debug: "MLHA" },
     { name: "SNĚŽÍ", hour: 2, temperature_2m: -2, precipitation: 0.6, cloudcover: 95, debug: "SNÍH" },
     { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10, debug: "NOC JASNO" }
 ];
@@ -119,9 +124,10 @@ function selectText(w) {
     const c = w.cloudcover;
 
     if (t <= 0 && p > 0) return "MRZNE A SNĚŽÍ";
-    if (p >= 1.0) return (t >= 20 ? "JE TEPLO" : "JE CHLADNO") + " A PRŠÍ";
-    if (p >= 0.1) return (t >= 20 ? "JE TEPLO" : "JE CHLADNO") + " A POPRCHÁVÁ";
-    if (c > 90 && t < 8) return "JE MLHA";
+    if (p >= 1.0) return (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
+    if (p >= 0.1) return (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
+
+    if (c > 92) return "JE MLHA";
 
     let sky =
         c >= 85 ? "ZATAŽENO" :
@@ -168,71 +174,62 @@ function render() {
 
     updateRain(w);
     updateSnow(w);
+    updateFog(w);
 }
 
 // =========================
 // RAIN
 // =========================
-const canvas = document.getElementById("rain");
-const ctx = canvas.getContext("2d");
+const rainCanvas = document.getElementById("rain");
+const rctx = rainCanvas.getContext("2d");
 
-let drops = [];
+let rainDrops = [];
 let raining = false;
 
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+function resizeRain() {
+    rainCanvas.width = innerWidth;
+    rainCanvas.height = innerHeight;
 }
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
+window.addEventListener("resize", resizeRain);
+resizeRain();
 
-function initRain(intensity = 1) {
-    drops = [];
-    for (let i = 0; i < 80 * intensity; i++) {
-        drops.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            length: (Math.random() * 20 + 10) * intensity,
-            speed: (Math.random() * 4 + 4) * intensity
+function initRain(i=1){
+    rainDrops=[];
+    for(let n=0;n<80*i;n++){
+        rainDrops.push({
+            x:Math.random()*rainCanvas.width,
+            y:Math.random()*rainCanvas.height,
+            l:Math.random()*20+10,
+            s:Math.random()*4+4
         });
     }
 }
 
-function updateRain(w) {
-    const p = w.precipitation;
-    const t = w.temperature_2m;
+function updateRain(w){
+    const p=w.precipitation;
+    const t=w.temperature_2m;
 
-    if (t <= 0 && p > 0) return;
+    if(t<=0 && p>0) return;
 
-    if (p >= 1.0) {
-        raining = true;
-        initRain(1);
-    } else if (p >= 0.1) {
-        raining = true;
-        initRain(0.4);
-    } else {
-        raining = false;
-    }
+    if(p>=1){ raining=true; initRain(1);}
+    else if(p>=0.1){ raining=true; initRain(0.4);}
+    else raining=false;
 }
 
-function drawRain() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function drawRain(){
+    rctx.clearRect(0,0,rainCanvas.width,rainCanvas.height);
 
-    if (raining) {
-        ctx.strokeStyle = "#aaa";
-        ctx.lineWidth = 1;
-
-        for (let d of drops) {
-            ctx.beginPath();
-            ctx.moveTo(d.x, d.y);
-            ctx.lineTo(d.x + 2, d.y + d.length);
-            ctx.stroke();
-
-            d.y += d.speed;
-            if (d.y > canvas.height) d.y = -20;
+    if(raining){
+        rctx.strokeStyle="#aaa";
+        for(let d of rainDrops){
+            rctx.beginPath();
+            rctx.moveTo(d.x,d.y);
+            rctx.lineTo(d.x+2,d.y+d.l);
+            rctx.stroke();
+            d.y+=d.s;
+            if(d.y>rainCanvas.height)d.y=-20;
         }
     }
-
     requestAnimationFrame(drawRain);
 }
 
@@ -242,93 +239,127 @@ function drawRain() {
 const snowCanvas = document.getElementById("snow");
 const sctx = snowCanvas.getContext("2d");
 
-let snow = [];
-let snowing = false;
+let snow=[];
+let snowing=false;
 
-function resizeSnow() {
-    snowCanvas.width = window.innerWidth;
-    snowCanvas.height = window.innerHeight;
+function resizeSnow(){
+    snowCanvas.width=innerWidth;
+    snowCanvas.height=innerHeight;
 }
-window.addEventListener("resize", resizeSnow);
+window.addEventListener("resize",resizeSnow);
 resizeSnow();
 
-function initSnow() {
-    snow = [];
-    for (let i = 0; i < 60; i++) {
+function initSnow(){
+    snow=[];
+    for(let i=0;i<60;i++){
         snow.push({
-            x: Math.random() * snowCanvas.width,
-            y: Math.random() * snowCanvas.height,
-            r: Math.random() * 2 + 1,
-            speed: Math.random() * 1 + 0.3
+            x:Math.random()*snowCanvas.width,
+            y:Math.random()*snowCanvas.height,
+            r:Math.random()*2+1,
+            s:Math.random()*1+0.3
         });
     }
 }
 
-function updateSnow(w) {
+function updateSnow(w){
     snowing = (w.temperature_2m <= 0 && w.precipitation > 0);
-    if (snowing && snow.length === 0) initSnow();
+    if(snowing && snow.length===0) initSnow();
 }
 
-function drawSnow() {
-    sctx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+function drawSnow(){
+    sctx.clearRect(0,0,snowCanvas.width,snowCanvas.height);
 
-    if (snowing) {
-        sctx.fillStyle = "#fff";
-
-        for (let f of snow) {
+    if(snowing){
+        sctx.fillStyle="#fff";
+        for(let f of snow){
             sctx.beginPath();
-            sctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            sctx.arc(f.x,f.y,f.r,0,Math.PI*2);
             sctx.fill();
-
-            f.y += f.speed;
-            if (f.y > snowCanvas.height) f.y = -5;
+            f.y+=f.s;
+            if(f.y>snowCanvas.height)f.y=-5;
         }
     }
-
     requestAnimationFrame(drawSnow);
 }
 
 // =========================
-// CONTROLS (FIXED)
+// FOG (NEW)
 // =========================
-document.addEventListener("keydown", (e) => {
-    if (!TEST_MODE) return;
+const fogCanvas = document.getElementById("fog");
+const fctx = fogCanvas.getContext("2d");
 
-    if (e.key === "ArrowRight") {
-        testIndex = (testIndex + 1) % testStates.length;
-        render();
+let fogActive=false;
+let fogLayers=[];
+
+function resizeFog(){
+    fogCanvas.width=innerWidth;
+    fogCanvas.height=innerHeight;
+}
+window.addEventListener("resize",resizeFog);
+resizeFog();
+
+function initFog(){
+    fogLayers=[];
+    for(let i=0;i<20;i++){
+        fogLayers.push({
+            x:Math.random()*fogCanvas.width,
+            y:Math.random()*fogCanvas.height,
+            r:Math.random()*200+100,
+            a:Math.random()*0.08
+        });
+    }
+}
+
+function updateFog(w){
+    fogActive = w.cloudcover > 92;
+    if(fogActive && fogLayers.length===0) initFog();
+}
+
+function drawFog(){
+    fctx.clearRect(0,0,fogCanvas.width,fogCanvas.height);
+
+    if(fogActive){
+        fctx.fillStyle="rgba(200,200,200,0.05)";
+        for(let f of fogLayers){
+            fctx.beginPath();
+            fctx.arc(f.x,f.y,f.r,0,Math.PI*2);
+            fctx.fill();
+        }
     }
 
-    if (e.key === "ArrowLeft") {
-        testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-        render();
-    }
+    requestAnimationFrame(drawFog);
+}
+
+// =========================
+// CONTROLS
+// =========================
+document.addEventListener("keydown",e=>{
+    if(!TEST_MODE)return;
+    if(e.key==="ArrowRight"){testIndex=(testIndex+1)%testStates.length;render();}
+    if(e.key==="ArrowLeft"){testIndex=(testIndex-1+testStates.length)%testStates.length;render();}
 });
 
-document.addEventListener("click", (e) => {
-    if (!TEST_MODE) return;
-
-    if (e.clientX > window.innerWidth / 2) {
-        testIndex = (testIndex + 1) % testStates.length;
-    } else {
-        testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-    }
-
+document.addEventListener("click",e=>{
+    if(!TEST_MODE)return;
+    testIndex = (e.clientX>innerWidth/2)
+        ? (testIndex+1)%testStates.length
+        : (testIndex-1+testStates.length)%testStates.length;
     render();
 });
 
 // =========================
-// START (FIXED LOOP)
+// START
 // =========================
 render();
 drawRain();
 drawSnow();
+drawFog();
 
-if (!TEST_MODE) {
-    setInterval(async () => {
+if(!TEST_MODE){
+    setInterval(async()=>{
         await getWeather();
         render();
-    }, FETCH_INTERVAL);
+    },50000);
 }
 </script>
 

@@ -15,6 +15,9 @@ body {
     height: 100vh;
     font-family: Helvetica Neue, Arial, sans-serif;
     transition: background 2s ease, color 2s ease;
+
+    /* 📱 mobile fix */
+    touch-action: none;
 }
 
 #text {
@@ -47,6 +50,9 @@ body {
 
 <script>
 
+// =========================
+// CONFIG
+// =========================
 const LAT = 50.107109;
 const LON = 14.447331;
 
@@ -55,8 +61,14 @@ const TEST_MODE = true;
 
 const el = document.getElementById("text");
 
+// =========================
+// STATE
+// =========================
 let isUpdating = false;
 let weatherTimer = null;
+
+let touchStartX = 0;
+let touchEndX = 0;
 
 // =========================
 // TEST DATA (DEN / NOC)
@@ -165,7 +177,7 @@ function showDebug(w, name) {
 }
 
 // =========================
-// RAIN (minimal)
+// RAIN (simplified)
 // =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
@@ -196,7 +208,11 @@ function drawRain() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (raining) {
-        ctx.strokeStyle = document.body.style.background === "rgb(10, 10, 10)" ? "#f5f5f5" : "#0a0a0a";
+        ctx.strokeStyle =
+            document.body.style.background === "rgb(10, 10, 10)"
+                ? "#f5f5f5"
+                : "#0a0a0a";
+
         ctx.lineWidth = 1;
 
         for (let d of drops) {
@@ -218,7 +234,7 @@ function drawRain() {
 }
 
 // =========================
-// MAIN LOOP (FIXED - NO BLINKING)
+// LOOP (NO BLINK FIX)
 // =========================
 async function runCycle() {
     if (isUpdating) return;
@@ -249,7 +265,15 @@ async function runCycle() {
 }
 
 // =========================
-// TEST SWITCH
+// CONTROL FUNCTIONS
+// =========================
+function restart() {
+    clearTimeout(weatherTimer);
+    runCycle();
+}
+
+// =========================
+// DESKTOP INPUT
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
@@ -265,12 +289,41 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
-function restart() {
-    clearTimeout(weatherTimer);
-    runCycle();
+// =========================
+// MOBILE INPUT (SWIPE + TAP)
+// =========================
+document.addEventListener("touchstart", (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+});
+
+document.addEventListener("touchend", (e) => {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+});
+
+function handleSwipe() {
+    const diff = touchEndX - touchStartX;
+
+    if (diff > 50) {
+        testIndex = (testIndex - 1 + testStates.length) % testStates.length;
+        restart();
+    }
+
+    if (diff < -50) {
+        testIndex = (testIndex + 1) % testStates.length;
+        restart();
+    }
 }
 
+// 👆 TAP = přepnout
+document.addEventListener("click", () => {
+    testIndex = (testIndex + 1) % testStates.length;
+    restart();
+});
+
+// =========================
 // START
+// =========================
 runCycle();
 drawRain();
 

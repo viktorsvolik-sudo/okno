@@ -67,31 +67,40 @@ const TEST_MODE = true;
 const el = document.getElementById("text");
 const debugEl = document.getElementById("debug");
 
-// =========================
-// STATE
-// =========================
 let liveWeather = null;
 let lastWeather = null;
 
 // =========================
-// TEST DATA
+// 🧪 TEST DATA
 // =========================
 const testStates = [
-    { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10, debug: "VEDRO" },
-    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50, debug: "TEPLO + POLOJASNO" },
-    { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90, debug: "ZATAŽENO" },
+    { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10 },
+    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50 },
+    { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90 },
 
-    { name: "POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80, debug: "POPRCHÁVÁ" },
-    { name: "PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90, debug: "PRŠÍ" },
+    { name: "POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
+    { name: "PRŠÍ (18°C)", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
 
-    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98, debug: "MLHA" },
+    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
 
-    { name: "SNĚŽÍ", hour: 2, temperature_2m: -2, precipitation: 0.6, cloudcover: 95, debug: "SNÍH" },
+    { name: "SNĚŽÍ", hour: 2, temperature_2m: -2, precipitation: 0.6, cloudcover: 95 },
 
-    { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10, debug: "NOC JASNO" }
+    { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10 }
 ];
 
 let testIndex = 0;
+
+// =========================
+// 🌡️ JEDNOTNÁ TEPLOTNÍ LOGIKA
+// =========================
+function getTempText(t) {
+    if (t >= 28) return "VEDRO";
+    if (t >= 20) return "TEPLO";
+    if (t >= 12) return "PŘÍJEMNĚ";
+    if (t >= 5) return "CHLADNO";
+    if (t > 0) return "ZIMA";
+    return "MRZNE";
+}
 
 // =========================
 // WEATHER
@@ -109,7 +118,7 @@ async function getWeather() {
 }
 
 // =========================
-// DAY / NIGHT (FIXED)
+// 🌗 DAY / NIGHT
 // =========================
 function updateDayNight(hour, w) {
     const isDay = hour >= 6 && hour < 20;
@@ -120,25 +129,25 @@ function updateDayNight(hour, w) {
 }
 
 // =========================
-// TEXT
+// 🧠 TEXT LOGIC (FIXED)
 // =========================
 function selectText(w) {
     const t = w.temperature_2m;
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    // ❄️ SNÍH (musí být první!)
+    // ❄️ SNÍH
     if (t <= 0 && p > 0) {
         return "MRZNE A SNĚŽÍ";
     }
 
-    // 🌧️ déšť
+    // 🌧️ déšť (teď správně!)
     if (p >= 1.0) {
-        return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
+        return "JE " + getTempText(t) + " A PRŠÍ";
     }
 
     if (p >= 0.1) {
-        return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
+        return "JE " + getTempText(t) + " A POPRCHÁVÁ";
     }
 
     // 🌫️ mlha
@@ -150,18 +159,11 @@ function selectText(w) {
         c >= 45 ? "POLOJASNO" :
         "JASNO";
 
-    let temp =
-        t >= 28 ? "VEDRO" :
-        t >= 20 ? "TEPLO" :
-        t >= 12 ? "PŘÍJEMNĚ" :
-        t >= 5 ? "CHLADNO" :
-        "ZIMA";
-
-    return "JE " + temp + " A " + sky;
+    return "JE " + getTempText(t) + " A " + sky;
 }
 
 // =========================
-// RENDER (STABLE)
+// 🎬 RENDER
 // =========================
 function render() {
     let w;
@@ -191,7 +193,7 @@ function render() {
 }
 
 // =========================
-// RAIN (FIXED - no flicker)
+// 🌧️ RAIN
 // =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
@@ -220,10 +222,7 @@ function initRain() {
 }
 
 function updateRain(w) {
-    const p = w.precipitation;
-
-    raining = p >= 0.1;
-
+    raining = w.precipitation >= 0.1;
     if (raining) initRain();
 }
 
@@ -248,7 +247,7 @@ function drawRain() {
 }
 
 // =========================
-// CONTROLS (MOBILE + DESKTOP)
+// CONTROLS
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
@@ -259,7 +258,7 @@ document.addEventListener("keydown", (e) => {
     render();
 });
 
-// mobile swipe
+// swipe
 let startX = 0;
 
 document.addEventListener("touchstart", (e) => {
@@ -278,18 +277,16 @@ document.addEventListener("touchend", (e) => {
 });
 
 // =========================
-// LOOP
+// START
 // =========================
-async function loop() {
-    await getWeather();
-    render();
-}
-
-loop();
+render();
 drawRain();
 
 if (!TEST_MODE) {
-    setInterval(loop, FETCH_INTERVAL);
+    setInterval(async () => {
+        await getWeather();
+        render();
+    }, FETCH_INTERVAL);
 }
 </script>
 </body>

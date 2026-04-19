@@ -107,12 +107,19 @@ function updateDayNight(hour, weather) {
     const isDay = hour >= 6 && hour < 20;
     const isOvercast = weather.cloudcover >= 85 && weather.precipitation < 0.1;
 
-    document.body.style.background = isDay
-        ? (isOvercast ? "#dddddd" : "#f5f5f5")
-        : "#0a0a0a";
+    if (!isDay) {
+        document.body.style.background = "#0a0a0a";
+        el.style.color = "#f5f5f5";
+        debugEl.style.color = "#aaa";
+        return;
+    }
 
-    el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
-    debugEl.style.color = isDay ? "#555" : "#aaa";
+    document.body.style.background = isOvercast
+        ? "linear-gradient(180deg, #ececec 0%, #d7d7d7 100%)"
+        : "#f5f5f5";
+
+    el.style.color = "#0a0a0a";
+    debugEl.style.color = isOvercast ? "#666" : "#555";
 }
 
 // =========================

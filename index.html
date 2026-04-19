@@ -57,6 +57,9 @@ const TEST_MODE = true;
 
 const el = document.getElementById("text");
 
+// 🧠 FIX: LOCK proti přebíhání
+let isUpdating = false;
+
 // =========================
 // 🧪 TEST DATA
 // =========================
@@ -193,7 +196,11 @@ function drawRain() {
         return;
     }
 
-    ctx.strokeStyle = document.body.style.background === "rgb(10, 10, 10)" ? "#f5f5f5" : "#0a0a0a";
+    ctx.strokeStyle =
+        document.body.style.background === "rgb(10, 10, 10)"
+            ? "#f5f5f5"
+            : "#0a0a0a";
+
     ctx.lineWidth = 1;
 
     for (let d of drops) {
@@ -214,9 +221,12 @@ function drawRain() {
 }
 
 // =========================
-// LOOP
+// LOOP (FIXED)
 // =========================
 async function showWeather() {
+    if (isUpdating) return;
+    isUpdating = true;
+
     updateDayNight();
 
     let weather;
@@ -241,6 +251,8 @@ async function showWeather() {
     } else {
         raining = false;
     }
+
+    isUpdating = false;
 
     setTimeout(showHledim, FETCH_INTERVAL - HLEDIM_DURATION);
 }

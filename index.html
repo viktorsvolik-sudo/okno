@@ -46,6 +46,9 @@ body {
 
 <script>
 
+// =========================
+// CONFIG
+// =========================
 const LAT = 50.107109;
 const LON = 14.447331;
 
@@ -72,14 +75,18 @@ let testIndex = 0;
 let liveWeather = null;
 
 // =========================
-// WEATHER
+// WEATHER FETCH
 // =========================
 async function getWeather() {
-    const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
-    );
-    const data = await res.json();
-    liveWeather = data.current;
+    try {
+        const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
+        );
+        const data = await res.json();
+        liveWeather = data.current;
+    } catch (e) {
+        console.error("Weather error", e);
+    }
 }
 
 // =========================
@@ -101,8 +108,8 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    if (p >= 1.0) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
-    if (p >= 0.1) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
+    if (p >= 1.0) return (t >= 20 ? "JE TEPLO" : "JE CHLADNO") + " A PRŠÍ";
+    if (p >= 0.1) return (t >= 20 ? "JE TEPLO" : "JE CHLADNO") + " A POPRCHÁVÁ";
 
     if (c > 90 && t < 8) return "JE MLHA";
 
@@ -123,28 +130,26 @@ function selectText(w) {
 }
 
 // =========================
-// RENDER (FIXED STABLE VERSION)
+// RENDER
 // =========================
 function render() {
 
     let w;
+    let hour;
 
     if (TEST_MODE) {
         w = testStates[testIndex];
-        updateDayNight(w.hour);
+        hour = w.hour;
     } else {
+        if (!liveWeather) return;
         w = liveWeather;
-        if (!w) return;
-
-        const hour = new Date().getHours();
-        updateDayNight(hour);
+        hour = new Date().getHours();
     }
 
-    // ✅ FIX: no blinking, stable layout
-    el.innerHTML = `
-        <div>VENKU</div>
-        <div>${selectText(w)}</div>
-    `;
+    updateDayNight(hour);
+
+    // ✅ správný formát – jeden řádek
+    el.textContent = "VENKU " + selectText(w);
 
     updateRain(w);
 }
@@ -169,8 +174,8 @@ function initRain() {
     drops = [];
     for (let i = 0; i < 80; i++) {
         drops.push({
-            x: Math.random() * window.innerWidth,
-            y: Math.random() * window.innerHeight,
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
             length: Math.random() * 20 + 10,
             speed: Math.random() * 4 + 4
         });
@@ -186,7 +191,6 @@ function drawRain() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (raining) {
-
         ctx.strokeStyle =
             document.body.style.background === "rgb(10, 10, 10)"
                 ? "#f5f5f5"
@@ -213,7 +217,7 @@ function drawRain() {
 }
 
 // =========================
-// CONTROLS
+// CONTROLS (TEST MODE)
 // =========================
 document.addEventListener("keydown", (e) => {
 
@@ -231,7 +235,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 // =========================
-// LOOP (FIXED API UPDATE)
+// LOOP
 // =========================
 async function loop() {
 
@@ -247,10 +251,13 @@ async function loop() {
 // =========================
 // START
 // =========================
-render();
 drawRain();
 
-if (!TEST_MODE) {
+if (TEST_MODE) {
+    render();
+} else {
+    await getWeather();
+    render();
     loop();
 }
 

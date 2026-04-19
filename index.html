@@ -195,23 +195,38 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-function initRain() {
+function initRain(intensity = 1) {
     drops = [];
-    for (let i = 0; i < 80; i++) {
+
+    const dropCount = Math.floor(80 * intensity); // méně kapek při slabém dešti
+
+    for (let i = 0; i < dropCount; i++) {
         drops.push({
             x: Math.random() * canvas.width,
             y: Math.random() * canvas.height,
-            length: Math.random() * 20 + 10,
-            speed: Math.random() * 4 + 4
+            length: (Math.random() * 20 + 10) * intensity, // kratší kapky
+            speed: (Math.random() * 4 + 4) * intensity     // pomalejší pohyb
         });
     }
 }
 
 function updateRain(w) {
-    raining = w.precipitation >= 0.1;
-    if (drops.length === 0) initRain();
-}
+    const p = w.precipitation;
 
+    if (p >= 1.0) {
+        // silný déšť
+        raining = true;
+        initRain(1);
+    } 
+    else if (p >= 0.1) {
+        // poprchává
+        raining = true;
+        initRain(0.4); // 👈 výrazně slabší
+    } 
+    else {
+        raining = false;
+    }
+}
 function drawRain() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 

@@ -68,17 +68,36 @@ const debugEl = document.getElementById("debug");
 
 // =========================
 // TEST DATA + DEBUG INFO
-// =========================
 const testStates = [
     { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10, debug: "t>=28 → VEDRO, jasno" },
     { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50, debug: "t>=20 → TEPLO, c=50 → POLOJASNO" },
     { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90, debug: "c>=85 → ZATAŽENO, t>=5 → CHLADNO" },
     { name: "DEN - POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80, debug: "p>=0.1 → POPRCHÁVÁ" },
     { name: "DEN - PRŠÍ", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90, debug: "p>=1.0 → PRŠÍ" },
+
+    // 🌫️ MLHA
+    {
+        name: "MLHA",
+        hour: 7,
+        temperature_2m: 4,
+        precipitation: 0,
+        cloudcover: 98,
+        debug: "c>=95 + bez srážek → MLHA"
+    },
+
+    // ❄️ SNÍH
+    {
+        name: "SNĚŽÍ",
+        hour: 2,
+        temperature_2m: -2,
+        precipitation: 0.6,
+        cloudcover: 95,
+        debug: "t<=0 + p>0 → SNÍH"
+    },
+
     { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10, debug: "noc + jasno + t>=5 → CHLADNO" },
     { name: "NOC - DEŠŤ", hour: 2, temperature_2m: 6, precipitation: 0.8, cloudcover: 95, debug: "noc + p>=0.1 → POPRCHÁVÁ" }
 ];
-
 let testIndex = 0;
 let liveWeather = null;
 

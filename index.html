@@ -25,7 +25,6 @@ body {
     z-index: 2;
 }
 
-/* 🌧️ rain layer */
 #rain {
     position: absolute;
     top: 0;
@@ -52,17 +51,15 @@ const LAT = 50.107109;
 const LON = 14.447331;
 
 const FETCH_INTERVAL = 50000;
-const HLEDIM_DURATION = 5000;
-
 const TEST_MODE = true;
 
 const el = document.getElementById("text");
 
-// 🧠 lock proti přebíhání
 let isUpdating = false;
+let weatherTimer = null;
 
 // =========================
-// 🧪 TEST DATA (DEN + NOC)
+// TEST DATA (DEN / NOC)
 // =========================
 const testStates = [
     { name: "DEN - VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10, isDay: true },
@@ -89,7 +86,7 @@ async function getWeather() {
 }
 
 // =========================
-// 🌗 DAY / NIGHT (TEST + REAL)
+// DAY / NIGHT
 // =========================
 function updateDayNight(w) {
     let isDay;
@@ -97,8 +94,7 @@ function updateDayNight(w) {
     if (TEST_MODE && w && w.isDay !== undefined) {
         isDay = w.isDay;
     } else {
-        const now = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" });
-        const hour = new Date(now).getHours();
+        const hour = new Date().getHours();
         isDay = hour >= 6 && hour < 20;
     }
 
@@ -129,7 +125,7 @@ function selectText(w) {
     else if (c >= 65) sky = "OBLAČNO";
     else if (c >= 45) sky = "POLOJASNO";
     else if (c >= 20) sky = "MÍRNĚ OBLAČNO";
-    else sky = "SLUNCE SVÍTÍ";
+    else sky = "JASNO";
 
     let temp = "";
     if (t >= 28) temp = "VEDRO";
@@ -156,7 +152,7 @@ function showDebug(w, name) {
         debug.style.left = "10px";
         debug.style.fontSize = "14px";
         debug.style.fontFamily = "monospace";
-        debug.style.opacity = "0.7";
+        debug.style.opacity = "0.6";
         debug.style.color = "gray";
         document.body.appendChild(debug);
     }
@@ -169,7 +165,7 @@ function showDebug(w, name) {
 }
 
 // =========================
-// RAIN
+// RAIN (minimal)
 // =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
@@ -199,29 +195,22 @@ function createRain() {
 function drawRain() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (!raining) {
-        requestAnimationFrame(drawRain);
-        return;
-    }
+    if (raining) {
+        ctx.strokeStyle = document.body.style.background === "rgb(10, 10, 10)" ? "#f5f5f5" : "#0a0a0a";
+        ctx.lineWidth = 1;
 
-    ctx.strokeStyle =
-        document.body.style.background === "rgb(10, 10, 10)"
-            ? "#f5f5f5"
-            : "#0a0a0a";
+        for (let d of drops) {
+            ctx.beginPath();
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x + 2, d.y + d.length);
+            ctx.stroke();
 
-    ctx.lineWidth = 1;
+            d.y += d.speed;
 
-    for (let d of drops) {
-        ctx.beginPath();
-        ctx.moveTo(d.x, d.y);
-        ctx.lineTo(d.x + 2, d.y + d.length);
-        ctx.stroke();
-
-        d.y += d.speed;
-
-        if (d.y > canvas.height) {
-            d.y = -20;
-            d.x = Math.random() * canvas.width;
+            if (d.y > canvas.height) {
+                d.y = -20;
+                d.x = Math.random() * canvas.width;
+            }
         }
     }
 
@@ -229,9 +218,9 @@ function drawRain() {
 }
 
 // =========================
-// LOOP (SAFE)
+// MAIN LOOP (FIXED - NO BLINKING)
 // =========================
-async function showWeather() {
+async function runCycle() {
     if (isUpdating) return;
     isUpdating = true;
 
@@ -240,7 +229,7 @@ async function showWeather() {
 
     if (TEST_MODE) {
         weather = testStates[testIndex];
-        name = testStates[testIndex].name;
+        name = weather.name;
     } else {
         weather = await getWeather();
     }
@@ -256,33 +245,33 @@ async function showWeather() {
 
     isUpdating = false;
 
-    setTimeout(showHledim, FETCH_INTERVAL - HLEDIM_DURATION);
-}
-
-function showHledim() {
-    el.textContent = "VENKU";
-    setTimeout(showWeather, HLEDIM_DURATION);
+    weatherTimer = setTimeout(runCycle, FETCH_INTERVAL);
 }
 
 // =========================
-// CONTROLS
+// TEST SWITCH
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
 
     if (e.key === "ArrowRight") {
         testIndex = (testIndex + 1) % testStates.length;
-        showWeather();
+        restart();
     }
 
     if (e.key === "ArrowLeft") {
         testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-        showWeather();
+        restart();
     }
 });
 
+function restart() {
+    clearTimeout(weatherTimer);
+    runCycle();
+}
+
 // START
-showWeather();
+runCycle();
 drawRain();
 
 </script>

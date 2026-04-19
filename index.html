@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Okno do dvora</title>
+
 <style>
 body {
     margin: 0;
@@ -38,6 +39,7 @@ body {
 </head>
 
 <body>
+
 <canvas id="rain"></canvas>
 
 <div id="window">
@@ -45,16 +47,17 @@ body {
 </div>
 
 <script>
+
 const LAT = 50.107109;
 const LON = 14.447331;
+
 const FETCH_INTERVAL = 50000;
-const HLEDIM_DURATION = 5000;
 const TEST_MODE = true;
 
 const el = document.getElementById("text");
 
 // =========================
-// 🧪 TEST DATA
+// TEST DATA
 // =========================
 const testStates = [
     { name: "VEDRO", temperature_2m: 30, precipitation: 0, cloudcover: 10 },
@@ -66,24 +69,35 @@ const testStates = [
 ];
 
 let testIndex = 0;
+let liveWeather = null;
 
 // =========================
-// WEATHER API
+// WEATHER
 // =========================
 async function getWeather() {
     const res = await fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
     );
     const data = await res.json();
-    return data.current;
+    liveWeather = data.current;
 }
 
 // =========================
 // DAY / NIGHT
 // =========================
-function updateDayNight() {
-    const now = new Date().toLocaleString("en-US", { timeZone: "Europe/Prague" });
-    const hour = new Date(now).getHours();
+function updateDayNight(hourOverride = null) {
+
+    let hour;
+
+    if (hourOverride !== null) {
+        hour = hourOverride; // 🧪 TEST MODE
+    } else {
+        const now = new Date();
+        const prague = new Date(
+            now.toLocaleString("en-US", { timeZone: "Europe/Prague" })
+        );
+        hour = prague.getHours();
+    }
 
     const isDay = hour >= 6 && hour < 20;
 
@@ -99,62 +113,55 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    if (p >= 1.0) {
-        return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
-    }
-
-    if (p >= 0.1) {
-        return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
-    }
+    if (p >= 1.0) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
+    if (p >= 0.1) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
 
     if (c > 90 && t < 8) return "JE MLHA";
 
-    let sky = "";
-    if (c >= 85) sky = "ZATAŽENO";
-    else if (c >= 65) sky = "OBLAČNO";
-    else if (c >= 45) sky = "POLOJASNO";
-    else if (c >= 20) sky = "MÍRNĚ OBLAČNO";
-    else sky = "JASNO";
+    let sky =
+        c >= 85 ? "ZATAŽENO" :
+        c >= 65 ? "OBLAČNO" :
+        c >= 45 ? "POLOJASNO" :
+        "JASNO";
 
-    let temp = "";
-    if (t >= 28) temp = "VEDRO";
-    else if (t >= 20) temp = "TEPLO";
-    else if (t >= 12) temp = "PŘÍJEMNĚ";
-    else if (t >= 5) temp = "CHLADNO";
-    else if (t > 0) temp = "ZIMA";
-    else return "MRZNE";
+    let temp =
+        t >= 28 ? "JE VEDRO" :
+        t >= 20 ? "JE TEPLO" :
+        t >= 12 ? "JE PŘÍJEMNĚ" :
+        t >= 5  ? "JE CHLADNO" :
+        "ZIMA";
 
     return "JE " + temp + " A " + sky;
 }
 
 // =========================
-// DEBUG
+// RENDER (FIX: VENKU IS ALWAYS PREFIX)
 // =========================
-function showDebug(w, name) {
-    let debug = document.getElementById("debug");
+function render() {
 
-    if (!debug) {
-        debug = document.createElement("div");
-        debug.id = "debug";
-        debug.style.position = "fixed";
-        debug.style.bottom = "10px";
-        debug.style.left = "10px";
-        debug.style.fontSize = "14px";
-        debug.style.fontFamily = "monospace";
-        debug.style.opacity = "0.7";
-        debug.style.color = "gray";
-        document.body.appendChild(debug);
+    let w;
+
+    if (TEST_MODE) {
+        w = testStates[testIndex];
+    } else {
+        w = liveWeather;
+        if (!w) return;
     }
 
-    debug.innerHTML =
-        `<b>${name || "LIVE"}</b><br>` +
-        `T: ${w.temperature_2m}°C | ` +
-        `P: ${w.precipitation} | ` +
-        `C: ${w.cloudcover}`;
+  if (TEST_MODE) {
+    updateDayNight(testStates[testIndex].hour);
+} else {
+    updateDayNight();
+}
+
+    // ✅ VENKU is now part of same line always
+    el.textContent = "VENKU" + selectText(w);
+
+    updateRain(w);
 }
 
 // =========================
-// RAIN
+// RAIN (UNCHANGED BUT STABLE)
 // =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
@@ -166,48 +173,49 @@ function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
-
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-function createRain() {
+function initRain() {
     drops = [];
     for (let i = 0; i < 80; i++) {
         drops.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
             length: Math.random() * 20 + 10,
             speed: Math.random() * 4 + 4
         });
     }
 }
 
+function updateRain(w) {
+    raining = w.precipitation >= 0.1;
+    if (drops.length === 0) initRain();
+}
+
 function drawRain() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (!raining) {
-        requestAnimationFrame(drawRain);
-        return;
-    }
+    if (raining) {
+        ctx.strokeStyle =
+            document.body.style.background === "rgb(10, 10, 10)"
+                ? "#f5f5f5"
+                : "#0a0a0a";
 
-    ctx.strokeStyle =
-        document.body.style.background === "rgb(10, 10, 10)"
-            ? "#f5f5f5"
-            : "#0a0a0a";
+        ctx.lineWidth = 1;
 
-    ctx.lineWidth = 1;
+        for (let d of drops) {
+            ctx.beginPath();
+            ctx.moveTo(d.x, d.y);
+            ctx.lineTo(d.x + 2, d.y + d.length);
+            ctx.stroke();
 
-    for (let d of drops) {
-        ctx.beginPath();
-        ctx.moveTo(d.x, d.y);
-        ctx.lineTo(d.x + 2, d.y + d.length);
-        ctx.stroke();
+            d.y += d.speed;
 
-        d.y += d.speed;
-
-        if (d.y > canvas.height) {
-            d.y = -20;
-            d.x = Math.random() * canvas.width;
+            if (d.y > canvas.height) {
+                d.y = -20;
+                d.x = Math.random() * canvas.width;
+            }
         }
     }
 
@@ -217,60 +225,42 @@ function drawRain() {
 // =========================
 // LOOP
 // =========================
-async function showWeather() {
-    updateDayNight();
+async function loop() {
 
-    let weather;
-    let name = "";
-
-    if (TEST_MODE) {
-        weather = testStates[testIndex];
-        name = testStates[testIndex].name;
-    } else {
-        weather = await getWeather();
+    if (!TEST_MODE) {
+        await getWeather();
     }
 
-    el.textContent = selectText(weather);
-    showDebug(weather, name);
+    render();
 
-    const shouldRain = weather.precipitation >= 0.1;
-
-    if (shouldRain) {
-        raining = true;
-        createRain();
-    } else {
-        raining = false;
-    }
-
-    setTimeout(showHledim, FETCH_INTERVAL - HLEDIM_DURATION);
-}
-
-function showHledim() {
-    updateDayNight();
-    el.textContent = "VENKU";
-    setTimeout(showWeather, HLEDIM_DURATION);
+    setTimeout(loop, FETCH_INTERVAL);
 }
 
 // =========================
-// CONTROLS
+// CONTROLS (TEST MODE)
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
 
     if (e.key === "ArrowRight") {
         testIndex = (testIndex + 1) % testStates.length;
-        showWeather();
+        render();
     }
 
     if (e.key === "ArrowLeft") {
         testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-        showWeather();
+        render();
     }
 });
 
+// =========================
 // START
-showWeather();
+// =========================
+render();
 drawRain();
+
+if (!TEST_MODE) loop();
+
 </script>
 
 </body>

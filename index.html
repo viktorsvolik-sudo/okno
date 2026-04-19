@@ -31,47 +31,58 @@ body {
 
 <script>
 
+// =========================
+// CONFIG
+// =========================
 const LAT = 50.107109;
 const LON = 14.447331;
 
-const FETCH_INTERVAL = 50000;
 const TEST_MODE = true;
+const FETCH_INTERVAL = 60000;
 
 const el = document.getElementById("text");
 
+// =========================
+// STATE
+// =========================
 let testIndex = 0;
 let liveWeather = null;
 
 // =========================
-// TEST STATES
+// TEST DATA (100% VALID)
 // =========================
 const testStates = [
     { temperature_2m: 30, precipitation: 0, cloudcover: 10 },
     { temperature_2m: 22, precipitation: 0, cloudcover: 50 },
-    { temperature_2m: 8, precipitation: 0, cloudcover: 90 },
-    { temperature_2m: 18, precipitation: 0.3, cloudcover: 80 },
-    { temperature_2m: 5, precipitation: 1.2, cloudcover: 95 }
+    { temperature_2m: 8,  precipitation: 0, cloudcover: 90 },
+    { temperature_2m: 18, precipitation: 0.2, cloudcover: 80 },
+    { temperature_2m: 5,  precipitation: 1.2, cloudcover: 95 }
 ];
 
 // =========================
-// FETCH WEATHER
+// WEATHER FETCH
 // =========================
-async function getWeather() {
-    const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
-    );
-    const data = await res.json();
-    liveWeather = data.current;
+async function fetchWeather() {
+    try {
+        const res = await fetch(
+            `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
+        );
+        const data = await res.json();
+        liveWeather = data.current;
+    } catch (e) {
+        console.log("weather error", e);
+    }
 }
 
 // =========================
-// TEXT LOGIC
+// TEXT ENGINE
 // =========================
-function selectText(w) {
+function getText(w) {
     const t = w.temperature_2m;
     const p = w.precipitation;
     const c = w.cloudcover;
 
+    // rain logic
     if (p >= 1.0) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
     if (p >= 0.1) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
 
@@ -87,14 +98,14 @@ function selectText(w) {
         t >= 28 ? "VEDRO" :
         t >= 20 ? "TEPLO" :
         t >= 12 ? "PŘÍJEMNĚ" :
-        t >= 5 ? "CHLADNO" :
+        t >= 5  ? "CHLADNO" :
         "ZIMA";
 
     return "JE " + temp + " A " + sky;
 }
 
 // =========================
-// RENDER (FIXED)
+// RENDER (ONE SOURCE OF TRUTH)
 // =========================
 function render() {
 
@@ -104,19 +115,22 @@ function render() {
         w = testStates[testIndex];
     } else {
         w = liveWeather;
-        if (!w) return;
     }
 
-    el.textContent = "VENKU JE " + selectText(w);
+    if (!w) {
+        el.textContent = "NAČÍTÁM...";
+        return;
+    }
+
+    el.textContent = "VENKU JE " + getText(w);
 }
 
 // =========================
-// LOOP (ONLY LIVE MODE REFRESH)
+// LIVE LOOP
 // =========================
 async function loop() {
-
     if (!TEST_MODE) {
-        await getWeather();
+        await fetchWeather();
         render();
     }
 
@@ -124,7 +138,7 @@ async function loop() {
 }
 
 // =========================
-// TEST CONTROLS (NO RESTART BUG)
+// TEST CONTROLS (FIXED)
 // =========================
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
@@ -143,11 +157,17 @@ document.addEventListener("keydown", (e) => {
 // =========================
 // START
 // =========================
-if (TEST_MODE) {
-    render();
-} else {
-    loop();
-}
+(async function start() {
+
+    if (TEST_MODE) {
+        render(); // immediate test render
+    } else {
+        await fetchWeather();
+        render();
+        loop();
+    }
+
+})();
 
 </script>
 

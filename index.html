@@ -121,8 +121,8 @@ function selectText(w) {
     const p = w.precipitation;
     const c = w.cloudcover;
 
-    if (p >= 1.0) return (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
-    if (p >= 0.1) return (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
+    if (p >= 1.0) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A PRŠÍ";
+    if (p >= 0.1) return "JE " + (t >= 20 ? "TEPLO" : "CHLADNO") + " A POPRCHÁVÁ";
 
     if (c > 90 && t < 8) return "JE MLHA";
 

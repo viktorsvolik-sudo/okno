@@ -131,6 +131,9 @@ function render() {
     updateRain(w);
 }
 
+// =========================
+// RAIN
+// =========================
 const canvas = document.getElementById("rain");
 const ctx = canvas.getContext("2d");
 
@@ -190,6 +193,11 @@ function drawRain() {
     requestAnimationFrame(drawRain);
 }
 
+// =========================
+// CONTROLS (DESKTOP + MOBILE)
+// =========================
+
+// keyboard
 document.addEventListener("keydown", (e) => {
     if (!TEST_MODE) return;
 
@@ -204,6 +212,24 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
+// mobile tap
+document.addEventListener("click", (e) => {
+    if (!TEST_MODE) return;
+
+    const half = window.innerWidth / 2;
+
+    if (e.clientX > half) {
+        testIndex = (testIndex + 1) % testStates.length;
+    } else {
+        testIndex = (testIndex - 1 + testStates.length) % testStates.length;
+    }
+
+    render();
+});
+
+// =========================
+// LOOP
+// =========================
 async function loop() {
     if (!TEST_MODE) {
         await getWeather();

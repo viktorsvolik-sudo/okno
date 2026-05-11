@@ -2,292 +2,1985 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>Okno do dvora</title>
-
 <style>
+* { box-sizing: border-box; margin: 0; padding: 0; cursor: none !important; }
 body {
-    margin: 0;
-    background: #f5f5f5;
-    color: #0a0a0a;
+    font-family: 'Courier New', monospace;
+    background: #000;
+    width: 100vw; height: 100vh;
+    overflow: hidden;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    font-family: Helvetica Neue, Arial, sans-serif;
-    transition: background 2s ease, color 2s ease;
+    flex-direction: column;
 }
-
-#text {
-    font-size: 5vw;
-    font-weight: 500;
-    text-align: center;
-    z-index: 2;
+#scene {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    overflow: hidden;
+    cursor: none;
 }
-
-#debug {
+#c-main {
+    display: block;
+    width: 100%; height: 100%;
+    image-rendering: auto;
+    will-change: contents;
+    transform: translateZ(0);
+}
+#c-noise {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    opacity: 0.055;
+    mix-blend-mode: overlay;
+    will-change: contents;
+    transform: translateZ(0);
+}
+#hud {
+    position: absolute;
+    top: 14px; left: 16px;
+    z-index: 99;
+    color: rgba(255,255,255,0.88);
+    font-size: 12px;
+    line-height: 1.9;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+}
+#hud-name { font-size: 16px; font-weight: bold; letter-spacing: 2.5px; margin-bottom: 2px; }
+#hud-tag {
+    position: absolute; top: 14px; right: 16px;
+    z-index: 99; font-size: 9px; letter-spacing: 1.5px;
+    color: rgba(255,255,255,0.45);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none; display: none;
+}
+#fps {
+    position: absolute; bottom: 4px; right: 8px;
+    font-size: 9px; color: rgba(255,255,255,0.22);
+    z-index: 99; pointer-events: none; display: none;
+}
+#panel {
+    background: #111;
+    padding: 14px 16px 16px;
+    border-top: 1px solid #1e1e1e;
+    flex-shrink: 0; display: none;
+}
+#tabs { display: flex; margin-bottom: 14px; border-bottom: 1px solid #1e1e1e; }
+.tab {
+    flex: 1; padding: 7px 0; text-align: center;
+    font-size: 10px; letter-spacing: 1.5px;
+    color: #3a3a3a; cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .2s; user-select: none; font-family: inherit;
+}
+.tab.on { color: #bbb; border-bottom-color: #777; }
+.tab:hover:not(.on) { color: #777; }
+.sl-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.sl-row label { font-size:9px; color:#444; letter-spacing:1px; min-width:74px; }
+.sl-row input[type=range] { flex:1; accent-color:#777; height:3px; }
+.sl-val { font-size:10px; color:#999; min-width:40px; text-align:right; }
+#presets { display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
+.p-btn {
+    padding:4px 9px; font-size:8px; letter-spacing:1px;
+    background:#161616; border:1px solid #252525;
+    border-radius:3px; color:#3a3a3a; cursor:pointer;
+    transition:all .2s; font-family:inherit;
+}
+.p-btn:hover { color:#888; border-color:#3a3a3a; }
+.p-btn.on { color:#ccc; border-color:#555; background:#1e1e1e; }
+#test-badge {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; letter-spacing: 2px;
+    color: rgba(255,200,60,0.5); z-index: 99; pointer-events: none; display: none;
+}
+#live-api {
     position: fixed;
     bottom: 10px;
-    left: 10px;
-    font-size: 14px;
+    right: 10px;
+    z-index: 999;
     font-family: monospace;
-    opacity: 0.7;
-    transition: color 2s ease;
-}
-
-#rain, #snow {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    font-size: 11px;
+    line-height: 1.7;
+    color: rgba(255,255,255,0.75);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
     pointer-events: none;
-    z-index: 1;
+    display: none;
+    text-align: right;
+    white-space: nowrap;
 }
 </style>
 </head>
-
 <body>
-
-<canvas id="rain"></canvas>
-<canvas id="snow"></canvas>
-
-<div id="window">
-    <div id="text">NAČÍTÁM...</div>
+<div id="scene">
+    <canvas id="c-main"></canvas>
+    <canvas id="c-noise"></canvas>
+    <div id="hud"><div id="hud-name">—</div><div id="hud-sub"></div></div>
+    <div id="hud-tag">Praha · 50°N 14°E</div>
+    <div id="test-badge">◎ TEST REŽIM</div>
+    <div id="fps"></div>
+    <div id="hud-debug" style="position:fixed;bottom:8px;left:8px;z-index:999;color:rgba(255,255,0,0.9);font-family:monospace;font-size:11px;text-shadow:0 1px 3px #000;pointer-events:none;white-space:nowrap;display:none;"></div>
+    <div id="live-api"></div>
+</div>
+<div id="panel">
+    <div id="tabs">
+        <div class="tab on" id="tab-test" onclick="setTestMode()">◎ TEST REŽIM</div>
+        <div class="tab" id="tab-back" onclick="switchToLive()">← LIVE</div>
+    </div>
+    <div id="p-test">
+        <div class="sl-row"><label>HODINA</label><input type="range" id="sl-hour" min="0" max="23" step="0.5" value="2" oninput="sliderUpdate()"><span class="sl-val" id="sv-hour">02:00</span></div>
+        <div class="sl-row"><label>TEPLOTA</label><input type="range" id="sl-temp" min="-15" max="40" step="1" value="12" oninput="sliderUpdate()"><span class="sl-val" id="sv-temp">12°C</span></div>
+        <div class="sl-row"><label>OBLAČNOST</label><input type="range" id="sl-cloud" min="0" max="100" step="1" value="30" oninput="sliderUpdate()"><span class="sl-val" id="sv-cloud">30%</span></div>
+        <div class="sl-row"><label style="font-size:9px;opacity:.6">↳ LOW</label><input type="range" id="sl-cloud-low" min="-1" max="100" step="1" value="-1" oninput="sliderUpdate()"><span class="sl-val" id="sv-cloud-low">auto</span></div>
+        <div class="sl-row"><label style="font-size:9px;opacity:.6">↳ MID</label><input type="range" id="sl-cloud-mid" min="-1" max="100" step="1" value="-1" oninput="sliderUpdate()"><span class="sl-val" id="sv-cloud-mid">auto</span></div>
+        <div class="sl-row"><label style="font-size:9px;opacity:.6">↳ HIGH</label><input type="range" id="sl-cloud-high" min="-1" max="100" step="1" value="-1" oninput="sliderUpdate()"><span class="sl-val" id="sv-cloud-high">auto</span></div>
+        <div class="sl-row"><label>SRÁŽKY (mm/h)</label><input type="range" id="sl-rain" min="0" max="30" step="0.1" value="0" oninput="sliderUpdate()"><span class="sl-val" id="sv-rain">0.0</span></div>
+        <div class="sl-row"><label>VÍTR (směr)</label><input type="range" id="sl-wind" min="-1" max="1" step="0.05" value="0.1" oninput="sliderUpdate()"><span class="sl-val" id="sv-wind">0.10</span></div>
+        <div id="presets"></div>
+        <div id="blend-preview" style="margin-top:10px;border-top:1px solid #222;padding-top:8px;">
+            <div style="font-size:10px;color:#555;letter-spacing:.08em;margin-bottom:6px;">BLEND PREVIEW</div>
+            <div style="display:flex;gap:5px;margin-bottom:5px;">
+                <select id="bp-from" style="flex:1;background:#111;color:#888;border:1px solid #2a2a2a;font-size:10px;padding:3px 4px;border-radius:3px;font-family:inherit;"></select>
+                <span style="color:#444;font-size:11px;align-self:center;">&#8594;</span>
+                <select id="bp-to" style="flex:1;background:#111;color:#888;border:1px solid #2a2a2a;font-size:10px;padding:3px 4px;border-radius:3px;font-family:inherit;"></select>
+            </div>
+            <div style="display:flex;gap:5px;align-items:center;">
+                <button id="bp-play" onclick="blendPreviewPlay()" style="background:#1a1a1a;color:#888;border:1px solid #2a2a2a;font-size:10px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:inherit;letter-spacing:.06em;">&#9654; PŘEHRÁT</button>
+                <input type="range" id="bp-speed" min="2" max="30" value="8" style="flex:1;" oninput="document.getElementById('bp-speed-val').textContent=this.value+'s'">
+                <span id="bp-speed-val" style="font-size:10px;color:#555;min-width:24px;">8s</span>
+                <span id="bp-t-val" style="font-size:10px;color:#444;min-width:28px;text-align:right;">t=0.00</span>
+            </div>
+            <div style="margin-top:5px;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden;">
+                <div id="bp-bar" style="height:100%;width:0%;background:#444;border-radius:2px;"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div id="debug"></div>
-
 <script>
-const LAT = 50.107109;
-const LON = 14.447331;
+const LAT = 50.1071, LON = 14.4473;
+const VIEW_AZIMUTH = 0;
+const SUNRISE = 6, SUNSET = 20;
 
-const FETCH_INTERVAL = 50000;
-const TEST_MODE = true;
+const IS_LOWEND = false; // NUC8i5BEH — full desktop performance
+const TARGET_FPS = 60;
+const NUM_CLOUDS = 24;
+const NUM_FOG = 48;
+const FRAME_MS = 1000 / TARGET_FPS;
+const PIXEL_SCALE = window.devicePixelRatio || 1;
 
-const el = document.getElementById("text");
-const debugEl = document.getElementById("debug");
+function rainLevel(mm) {
+    if (mm <= 0.02) return 0; if (mm <= 1.5) return 1;
+    if (mm <= 5) return 2; if (mm <= 10) return 3; return 4;
+}
+const RAIN_DROPS = [0, 90, 200, 340, 650];
+const RAIN_LEN   = [0,  7,  15,  24,  42];
+const RAIN_SPEED = [0,[1.2,3],[2.5,7],[5,12],[9,18]];
+const RAIN_ALPHA = [0,.28,.32,.42,.56];
+const RAIN_WIDTH = [0,0.6,0.85,1.1,1.6];
+const RAIN_BLUR  = [0,1.2,2.0,2.8,4.0];
 
-let liveWeather = null;
-let lastWeather = null;
-
-// =========================
-// 🧪 TEST DATA
-// =========================
-const testStates = [
-    { name: "DEN - VEDRO", hour: 14, temperature_2m: 30, precipitation: 0, cloudcover: 10 },
-    { name: "DEN - POLOJASNO", hour: 16, temperature_2m: 22, precipitation: 0, cloudcover: 50 },
-    { name: "DEN - ZATAŽENO", hour: 12, temperature_2m: 8, precipitation: 0, cloudcover: 90 },
-
-    { name: "POPRCHÁVÁ", hour: 10, temperature_2m: 12, precipitation: 0.2, cloudcover: 80 },
-    { name: "PRŠÍ (18°C)", hour: 11, temperature_2m: 18, precipitation: 1.5, cloudcover: 90 },
-
-    { name: "MLHA", hour: 7, temperature_2m: 4, precipitation: 0, cloudcover: 98 },
-
-    { name: "SNĚŽÍ", hour: 2, temperature_2m: -2, precipitation: 0.6, cloudcover: 95 },
-
-    { name: "NOC - JASNO", hour: 23, temperature_2m: 10, precipitation: 0, cloudcover: 10 }
+const PRESETS = [
+    {name:"JASNÁ NOC",  temp:12, rain:0,   cloud:0,   wind:0.1,  hour:1,  cloudStyle:"default"  },
+    {name:"POLOJASNO",  temp:22, rain:0,   cloud:36,  wind:0.18, hour:14, cloudStyle:"default"  },
+    {name:"POLOJ. MRÁČKY", temp:24, rain:0, cloud:42, wind:0.22, hour:13, cloudStyle:"cloudlets"},
+    {name:"MRHOLENÍ",   temp:12, rain:0.8, cloud:80,  wind:0.3,  hour:10, cloudStyle:"default"  },
+    {name:"PŘEHÁŇKA",   temp:16, rain:2,   cloud:60,  wind:0.5,  hour:14, cloudStyle:"default"  },
+    {name:"DÉŠŤ",       temp:14, rain:4,   cloud:85,  wind:0.8,  hour:13, cloudStyle:"default"  },
+    {name:"SILNÝ DÉŠŤ", temp:13, rain:16,  cloud:95,  wind:0.9,  hour:14, cloudStyle:"default"  },
+    {name:"BOUŘE",      temp:19, rain:25,  cloud:100, wind:1,    hour:21, cloudStyle:"default"  },
+    {name:"VEDRO",      temp:35, rain:0,   cloud:5,   wind:0,    hour:15, cloudStyle:"default"  },
+    {name:"JASNO",      temp:28, rain:0,   cloud:10,  wind:0.2,  hour:9,  cloudStyle:"default"  },
+    {name:"OBLAČNO",    temp:16, rain:0,   cloud:75,  wind:-0.5, hour:18, cloudStyle:"default"  },
+    {name:"MLHA",       temp:4,  rain:0,   cloud:98,  wind:0,    hour:5,  cloudStyle:"default"  },
+    {name:"SNÍH",       temp:-3, rain:0.7, cloud:100, wind:-0.3, hour:9,  cloudStyle:"default"  }
 ];
 
-let testIndex = 0;
+let W = {};
+let raining = false, precipType = null;
+let cloudStyleMode = 'default';
+let selectedCloudStyle = 'default';
+let cloudResponseMode = 'layers'; // layers = literal low/mid/high, veil = full overcast grey veil
+let liveForecast = null;
 
-// =========================
-// 🌡️ JEDNOTNÁ TEPLOTNÍ LOGIKA
-// =========================
-function getTempText(t) {
-    if (t >= 28) return "VEDRO";
-    if (t >= 20) return "TEPLO";
-    if (t >= 12) return "PŘÍJEMNĚ";
-    if (t >= 5) return "CHLADNO";
-    if (t > 0) return "ZIMA";
-    return "MRZNE";
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+        const rad=Math.min(r,w/2,h/2);
+        this.moveTo(x+rad,y); this.lineTo(x+w-rad,y); this.arcTo(x+w,y,x+w,y+rad,rad);
+        this.lineTo(x+w,y+h-rad); this.arcTo(x+w,y+h,x+w-rad,y+h,rad);
+        this.lineTo(x+rad,y+h); this.arcTo(x,y+h,x,y+h-rad,rad);
+        this.lineTo(x,y+rad); this.arcTo(x,y,x+rad,y,rad); this.closePath();
+    };
 }
 
-// =========================
-// WEATHER
-// =========================
-async function getWeather() {
-    try {
-        const res = await fetch(
-            `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,precipitation,cloudcover`
-        );
-        const data = await res.json();
-        liveWeather = data.current;
-    } catch (e) {
-        console.log("fetch error", e);
+const sceneEl = document.getElementById('scene');
+const canvas  = document.getElementById('c-main');
+const ctx     = canvas.getContext('2d', {alpha:false, willReadFrequently:false});
+const noiseCanvas = document.getElementById('c-noise');
+const noiseCtx    = noiseCanvas.getContext('2d');
+
+let CW=0, CH=0;
+let noiseImageData = null;
+let noiseFrameCounter = 0;
+
+function createBufferCanvas(w, h) {
+    if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w,h);
+    const c = document.createElement('canvas'); c.width=w; c.height=h; return c;
+}
+
+function rebuildNoise() {
+    // O něco menší buffer = jemnější, méně čitelný grain
+    noiseCanvas.width  = Math.round(CW * 0.25);
+    noiseCanvas.height = Math.round(CH * 0.25);
+    noiseCanvas.style.width  = CW + 'px';
+    noiseCanvas.style.height = CH + 'px';
+    noiseImageData = null;
+}
+
+function drawNoise() {
+    const nw = noiseCanvas.width, nh = noiseCanvas.height;
+    if (!noiseImageData || noiseImageData.width !== nw || noiseImageData.height !== nh) {
+        noiseImageData = noiseCtx.createImageData(nw, nh);
     }
+    const d = noiseImageData.data;
+    // V noci: šum je tmavší, modravě tónovaný (městský šum — tmavé nebe s mírnou texturou)
+    // Přes den: neutrální světlý šum jako dřív
+    const dl = cDL ?? 1;
+    const nightF = clamp(1 - dl / 0.3, 0, 1);
+    // Noční šum: base ~52, range 28 — tmavý, jemný
+    // Denní šum: base 108, range 40 — světlý, overlay
+    const base  = Math.round(lerp(108, 52, nightF));
+    const range = Math.round(lerp(40,  28, nightF));
+    for (let i = 0; i < d.length; i += 4) {
+        const v = base + (Math.random() * range | 0);
+        // Noční šum má mírný modrý nádech (tmavá obloha nad městem)
+        d[i]   = v - Math.round(nightF * 4);  // R — slabší
+        d[i+1] = v - Math.round(nightF * 2);  // G
+        d[i+2] = v + Math.round(nightF * 8);  // B — silnější = modravý tón
+        d[i+3] = 255;
+    }
+    noiseCtx.putImageData(noiseImageData, 0, 0);
 }
 
-// =========================
-// 🌗 DAY / NIGHT
-// =========================
-function updateDayNight(hour, w) {
-    const isDay = hour >= 6 && hour < 20;
+function resize() {
+    CW = sceneEl.clientWidth;
+    CH = sceneEl.clientHeight || window.innerHeight - document.getElementById('panel').offsetHeight;
+    canvas.width  = Math.round(CW * PIXEL_SCALE);
+    canvas.height = Math.round(CH * PIXEL_SCALE);
+    canvas.style.width  = CW+'px';
+    canvas.style.height = CH+'px';
+    if (PIXEL_SCALE!==1) ctx.setTransform(PIXEL_SCALE,0,0,PIXEL_SCALE,0,0);
+    fogOSC = {};
+    snowOSC = {};
+    vignetteOSC = null; // rebuild vignette at new dimensions
+    _smogCache.key = null;
+    initStars();
+    initClouds();
+    initFog();
+    rebuildNoise();
+}
+let _resizeTimer=null;
+window.addEventListener('resize',()=>{ clearTimeout(_resizeTimer); _resizeTimer=setTimeout(resize, 80); });
+setTimeout(resize,50);
 
-    document.body.style.background = isDay ? "#f5f5f5" : "#0a0a0a";
-    el.style.color = isDay ? "#0a0a0a" : "#f5f5f5";
-    debugEl.style.color = isDay ? "#666" : "#aaa";
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smoothstep=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
+
+function parseHourValue(v) {
+    if (!v) return null;
+    const s = String(v);
+    if (s.includes('T')) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const [datePart, timePart] = s.split('T');
+        const [hh = '0', mm = '0'] = timePart.split(':');
+        const h = parseInt(hh, 10), m = parseInt(mm, 10);
+        if (isNaN(h) || isNaN(m)) return null;
+        const todayMidnight = new Date(todayStr + 'T00:00:00').getTime();
+        const slotMidnight  = new Date(datePart + 'T00:00:00').getTime();
+        const dayOffset = (slotMidnight - todayMidnight) / 86400000;
+        return dayOffset * 24 + h + m / 60;
+    }
+    const [hh = '0', mm = '0'] = s.split(':');
+    const h = parseInt(hh, 10), m = parseInt(mm, 10);
+    if (isNaN(h) || isNaN(m)) return null;
+    return h + m / 60;
 }
 
-// =========================
-// 🧠 TEXT LOGIC (FIXED)
-// =========================
-function selectText(w) {
-    const t = w.temperature_2m;
-    const p = w.precipitation;
-    const c = w.cloudcover;
+function currentLocalHour() {
+    const d = new Date();
+    return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+}
 
-    // ❄️ SNÍH
-    if (t <= 0 && p > 0) {
-        return "MRZNE A SNĚŽÍ";
+function getRenderHour() {
+    return mode === 'live' ? currentLocalHour() : (W.hour ?? 12);
+}
+
+function getSunTiming() {
+    const sunrise=W.sunriseHour??SUNRISE, sunset=W.sunsetHour??SUNSET;
+    const daylightSpan=Math.max(6,sunset-sunrise);
+    const dawnLen=clamp(0.95+(14-daylightSpan)*0.06,0.85,1.45);
+    const duskLen=clamp(1.15+(14-daylightSpan)*0.09,1.0,1.75);
+    return {sunrise,sunset,daylightSpan,dawnLen,duskLen,
+        dawnStart:sunrise-dawnLen, duskEnd:sunset+duskLen};
+}
+
+function getDL(h) {
+    const sun=getSunTiming();
+    const morningLiftEnd=sun.sunrise+0.85, eveningFallStart=sun.sunset-0.7;
+    if(h<sun.dawnStart||h>=sun.duskEnd) return 0;
+    if(h<sun.sunrise) return lerp(0,0.16,smoothstep(sun.dawnStart,sun.sunrise,h));
+    if(h<morningLiftEnd) return lerp(0.16,1,smoothstep(sun.sunrise,morningLiftEnd,h));
+    if(h<eveningFallStart) return 1;
+    if(h<sun.sunset) return lerp(1,0.3,smoothstep(eveningFallStart,sun.sunset,h));
+    return lerp(0.3,0,smoothstep(sun.sunset,sun.duskEnd,h));
+}
+
+function getTwilightInfo(hour,cloud=0) {
+    const sun=getSunTiming();
+    let center=null, phase='none';
+    if(hour>=sun.dawnStart&&hour<=sun.sunrise+0.55){center=sun.sunrise-sun.dawnLen*0.15;phase='sunrise';}
+    else if(hour>=sun.sunset-0.55&&hour<=sun.duskEnd){center=sun.sunset+sun.duskLen*0.2;phase='sunset';}
+    if(center==null) return {intensity:0,phase};
+    const windowH=phase==='sunrise'?sun.dawnLen*0.95:sun.duskLen*1.05;
+    const base=1-Math.abs(hour-center)/windowH;
+    const cf=cloud<12?0.72:cloud<65?lerp(0.78,1.08,(cloud-12)/53):lerp(1.08,0.82,Math.min(cloud-65,35)/35);
+    return {intensity:clamp(base*cf,0,1),phase};
+}
+
+function getBG(temp, cloud, cloudHigh) {
+    // Čistá modrá obloha podle teploty
+    let b;
+    if      (temp >= 30) b = [108, 168, 255];
+    else if (temp >= 25) b = [118, 175, 255];
+    else if (temp >= 20) b = [125, 180, 255];
+    else if (temp >= 15) b = [128, 183, 255];
+    else if (temp >= 10) b = [129, 184, 255];
+    else if (temp >=  5) b = [130, 185, 255];
+    else if (temp >=  0) b = [134, 186, 252];
+    else if (temp >= -5) b = [139, 188, 248];
+    else                 b = [145, 191, 245];
+
+    const t = cloud / 100;
+
+    // Cirrus tint: vysoká oblačnost (cloudHigh) přidává namodralou bílou —
+    // charakteristický "mléčný" vzhled oblohy pod cirrostratusem.
+    if (cloudHigh > 20) {
+        const cirrusT = clamp((cloudHigh - 20) / 80, 0, 1);
+        // Namodralá bílá — ne šedá, cirrus propouští světlo
+        const cirrus = [210, 218, 235];
+        b = b.map((c, i) => Math.round(lerp(c, cirrus[i], Math.pow(cirrusT, 0.7) * 0.72)));
     }
 
-    // 🌧️ déšť (teď správně!)
-    if (p >= 1.0) {
-        return "JE " + getTempText(t) + " A PRŠÍ";
-    }
+    if (t < 0.01) return b;
 
-    if (p >= 0.1) {
-        return "JE " + getTempText(t) + " A POPRCHÁVÁ";
-    }
+    // Šedá barva zatažené oblohy — tmavší při vyšší oblačnosti
+    const grey = [
+        Math.round(lerp(195, 145, Math.pow(t, 1.4))),
+        Math.round(lerp(200, 152, Math.pow(t, 1.4))),
+        Math.round(lerp(208, 162, Math.pow(t, 1.4))),
+    ];
 
-    // 🌫️ mlha
-    if (c > 90 && t < 8) return "JE MLHA";
-
-    let sky =
-        c >= 85 ? "ZATAŽENO" :
-        c >= 65 ? "OBLAČNO" :
-        c >= 45 ? "POLOJASNO" :
-        "JASNO";
-
-    return "JE " + getTempText(t) + " A " + sky;
+    // Přechod modrá→šedá: při oblačnu musí i základ oblohy zešednout
+    const mix = clamp((t - 0.10) / 0.62, 0, 1);
+    return b.map((c, i) => Math.round(lerp(c, grey[i], Math.pow(mix, 1.35))));
 }
 
-// =========================
-// 🎬 RENDER
-// =========================
-function render() {
-    let w;
-    let hour;
+function applyLight(rgb,dl) {
+    const f=dl<0.24?lerp(0.025,0.38,smoothstep(0,0.24,dl)):lerp(0.38,1,smoothstep(0.24,1,dl));
+    // Noční ambient: obloha není čistě černá — jemný šedomodrý základ.
+    // Pouze modrý kanál mírně posílen, teplý podtón je záměrně minimální.
+    const na = clamp(1 - dl / 0.12, 0, 1);
+    const amb = [Math.round(na*2), Math.round(na*3), Math.round(na*6)];
+    return rgb.map((c,i) => Math.min(255, Math.round(c*f) + amb[i]));
+}
 
-    if (TEST_MODE) {
-        w = testStates[testIndex];
-        hour = w.hour;
+function mixRgb(a,b,t){
+    return [Math.round(lerp(a[0],b[0],t)),Math.round(lerp(a[1],b[1],t)),Math.round(lerp(a[2],b[2],t))];
+}
+function angularDiff(a,b){const d=Math.abs(a-b)%360;return d>180?360-d:d;}
 
-        debugEl.innerHTML =
-            `<b>${w.name}</b><br>` +
-            `T: ${w.temperature_2m}°C<br>` +
-            `P: ${w.precipitation}<br>` +
-            `C: ${w.cloudcover}`;
-    } else {
-        if (!liveWeather) return;
-        w = liveWeather;
-        hour = new Date().getHours();
+const THUNDER_CODES = [95,96,99];
+const SNOW_CODES = [71,73,75,77,85,86];
+const DRIZZLE_CODES = [51,53,55,56,57];
+const RAIN_CODES = [61,63,65,66,67,80,81,82];
+const HEAVY_RAIN_CODES = [65,67,82];
+
+const isFogCode=c=>c===45||c===48;
+const isThunderstormCode=c=>THUNDER_CODES.includes(c);
+const isSnowCode=c=>SNOW_CODES.includes(c);
+const isDrizzleCode=c=>DRIZZLE_CODES.includes(c);
+const isRainCode=c=>RAIN_CODES.includes(c);
+
+const isSnow=s=>s?.precipKind==='snow'||s?.name==='SNÍH';
+const isFog=s=>s?.fog===true||s?.name==='MLHA'||isFogCode(s?.weatherCode);
+const isThunderstorm=s=>s?.thunderstorm===true||isThunderstormCode(s?.weatherCode);
+
+function guessName(temp,rain,cloud,weatherCode,sunPower=0) {
+    // sunPower přebíjí oblačnost jen pokud je opravdu minimální
+    if(sunPower>0.88&&rain<0.1&&cloud<20&&![95,96,99].includes(weatherCode)) return 'JASNO';
+    if(sunPower>0.70&&rain<0.1&&![95,96,99].includes(weatherCode)&&cloud<35) return 'POLOJASNO';
+    if(weatherCode===0||weatherCode===1) return 'JASNO';
+    if(weatherCode===2&&cloud<25) return 'JASNO';
+    if(weatherCode===2) return 'POLOJASNO';
+    if(weatherCode===3&&cloud<40) return 'POLOJASNO';
+    if(weatherCode===3) return 'OBLAČNO';
+    if(isFogCode(weatherCode)) return 'MLHA';
+    if([95,96,99].includes(weatherCode)) return 'BOUŘE';
+    if([71,73,75,77,85,86].includes(weatherCode)) return 'SNÍH';
+    if(isDrizzleCode(weatherCode)) return 'MRHOLENÍ';
+    if(isRainCode(weatherCode)) return HEAVY_RAIN_CODES.includes(weatherCode) ? 'SILNÝ DÉŠŤ' : 'DÉŠŤ';
+    if(temp<=0&&rain>0) return 'SNÍH';
+    if(rain>3&&cloud>90) return 'BOUŘE'; if(rain>0.1) return 'DÉŠŤ';
+    if(cloud>70) return 'OBLAČNO'; if(cloud>30) return 'POLOJASNO';
+    if(temp>=30) return 'VEDRO'; return 'JASNO';
+}
+
+function getLiveWeatherName(data, cloud) {
+    const code = data.weather_code;
+    const temp = data.temperature_2m ?? 0;
+    const liquidPrecip = (data.rain ?? 0) + (data.showers ?? 0);
+    const snowfall = data.snowfall ?? 0;
+
+    if (isFogCode(code)) return 'MLHA';
+    if (isThunderstormCode(code)) return 'BOUŘE';
+    if (isSnowCode(code) || snowfall > 0.05) return 'SNÍH';
+    if (isDrizzleCode(code)) return 'MRHOLENÍ';
+    if (isRainCode(code) || liquidPrecip > 0.05) {
+        return HEAVY_RAIN_CODES.includes(code) || liquidPrecip > 7 ? 'SILNÝ DÉŠŤ' : 'DÉŠŤ';
     }
-
-    lastWeather = w;
-
-    updateDayNight(hour, w);
-    el.textContent = selectText(w);
-
-    updateRain(w);
+    if (code === 3) return cloud < 40 ? 'POLOJASNO' : 'OBLAČNO';
+    if (code === 2) return cloud < 25 ? 'JASNO' : 'POLOJASNO';
+    if (code === 1 || code === 0) return temp >= 30 ? 'VEDRO' : 'JASNO';
+    if (temp >= 30 && cloud < 25) return 'VEDRO';
+    if (cloud > 70) return 'OBLAČNO';
+    if (cloud > 30) return 'POLOJASNO';
+    return 'JASNO';
 }
 
-// =========================
-// 🌧️ RAIN
-// =========================
-const canvas = document.getElementById("rain");
-const ctx = canvas.getContext("2d");
-
-let drops = [];
-let raining = false;
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+function blendValue(a, b, t) {
+    if (a == null && b == null) return null;
+    if (a == null) return b;
+    if (b == null) return a;
+    return lerp(a, b, t);
 }
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
 
-function initRain() {
-    if (drops.length > 0) return;
+function getHourlySourceAt(hourly, idx) {
+    if (!hourly?.time?.[idx]) return null;
+    return {
+        time: hourly.time[idx],
+        temperature_2m: hourly.temperature_2m?.[idx] ?? null,
+        apparent_temperature: hourly.apparent_temperature?.[idx] ?? null,
+        relative_humidity_2m: hourly.relative_humidity_2m?.[idx] ?? null,
+        precipitation: hourly.precipitation?.[idx] ?? null,
+        rain: hourly.rain?.[idx] ?? null,
+        showers: hourly.showers?.[idx] ?? null,
+        snowfall: hourly.snowfall?.[idx] ?? null,
+        weather_code: hourly.weather_code?.[idx] ?? null,
+        cloud_cover: hourly.cloud_cover?.[idx] ?? null,
+        cloud_cover_low: hourly.cloud_cover_low?.[idx] ?? null,
+        cloud_cover_mid: hourly.cloud_cover_mid?.[idx] ?? null,
+        cloud_cover_high: hourly.cloud_cover_high?.[idx] ?? null,
+        visibility: hourly.visibility?.[idx] ?? null,
+        wind_speed_10m: hourly.wind_speed_10m?.[idx] ?? null,
+        wind_direction_10m: hourly.wind_direction_10m?.[idx] ?? null,
+        wind_gusts_10m: hourly.wind_gusts_10m?.[idx] ?? null,
+        is_day: hourly.is_day?.[idx] ?? null,
+        direct_radiation: hourly.direct_radiation?.[idx] ?? null,
+        shortwave_radiation: hourly.shortwave_radiation?.[idx] ?? null
+    };
+}
 
-    for (let i = 0; i < 100; i++) {
-        drops.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            length: Math.random() * 20 + 10,
-            speed: Math.random() * 4 + 4
+function getNextHourlySource(payload, hourNow) {
+    const hourly = payload?.hourly;
+    const times = hourly?.time ?? [];
+    for (let i = 0; i < times.length; i++) {
+        const hour = parseHourValue(times[i]);
+        if (hour != null && hour > hourNow + 0.01) return getHourlySourceAt(hourly, i);
+    }
+    return getHourlySourceAt(hourly, times.length - 1);
+}
+
+function blendWeatherSources(currentSource, targetSource, t) {
+    if (!targetSource) return {...currentSource};
+    const chooseStep = (a, b) => (t < 0.5 ? (a ?? b) : (b ?? a));
+    return {
+        time: currentSource.time,
+        temperature_2m: blendValue(currentSource.temperature_2m, targetSource.temperature_2m, t),
+        apparent_temperature: blendValue(currentSource.apparent_temperature, targetSource.apparent_temperature, t),
+        relative_humidity_2m: blendValue(currentSource.relative_humidity_2m, targetSource.relative_humidity_2m, t),
+        precipitation: blendValue(currentSource.precipitation, targetSource.precipitation, t),
+        rain: blendValue(currentSource.rain, targetSource.rain, t),
+        showers: blendValue(currentSource.showers, targetSource.showers, t),
+        snowfall: blendValue(currentSource.snowfall, targetSource.snowfall, t),
+        weather_code: chooseStep(currentSource.weather_code, targetSource.weather_code),
+        cloud_cover: blendValue(currentSource.cloud_cover, targetSource.cloud_cover, t),
+        cloud_cover_low: blendValue(currentSource.cloud_cover_low, targetSource.cloud_cover_low, t),
+        cloud_cover_mid: blendValue(currentSource.cloud_cover_mid, targetSource.cloud_cover_mid, t),
+        cloud_cover_high: blendValue(currentSource.cloud_cover_high, targetSource.cloud_cover_high, t),
+        visibility: blendValue(currentSource.visibility, targetSource.visibility, t),
+        wind_speed_10m: blendValue(currentSource.wind_speed_10m, targetSource.wind_speed_10m, t),
+        wind_direction_10m: blendValue(currentSource.wind_direction_10m, targetSource.wind_direction_10m, t),
+        wind_gusts_10m: blendValue(currentSource.wind_gusts_10m, targetSource.wind_gusts_10m, t),
+        is_day: chooseStep(currentSource.is_day, targetSource.is_day),
+        direct_radiation: blendValue(currentSource.direct_radiation, targetSource.direct_radiation, t),
+        shortwave_radiation: blendValue(currentSource.shortwave_radiation, targetSource.shortwave_radiation, t)
+    };
+}
+
+function buildLiveWeatherState(source, payload, hourOverride = null) {
+    const weatherCode = source.weather_code;
+    const _measuredRain = (source.rain ?? 0) + (source.showers ?? 0);
+    const snowfall = source.snowfall ?? 0;
+    const precipTotal = source.precipitation ?? 0;
+    // Open-Meteo current.rain resets to 0 at top of each hour — use weather_code
+    // to guarantee a realistic floor so heavy rain isn't invisible mid-hour.
+    const _codeMinRain = HEAVY_RAIN_CODES.includes(source.weather_code) ? 9
+        : [63, 81].includes(source.weather_code) ? 4
+        : isRainCode(source.weather_code) ? 1.2
+        : isDrizzleCode(source.weather_code) ? 0.4
+        : 0;
+    const liquidPrecip = Math.max(_measuredRain, precipTotal, _codeMinRain);
+    const minutely15 = payload?.minutely_15 ?? {};
+    const nearTermCode = minutely15.weather_code?.[0] ?? weatherCode;
+    const lightningPotential = minutely15.lightning_potential?.[0] ?? null;
+    const thunderstormActive = isThunderstormCode(nearTermCode) || isThunderstormCode(weatherCode);
+    const lightningActive = thunderstormActive && (lightningPotential == null || lightningPotential > 0);
+    const hour = hourOverride ?? parseHourValue(source.time) ?? currentLocalHour();
+    const windAmp = clamp(((source.wind_speed_10m ?? 0) + (source.wind_gusts_10m ?? 0) * 0.35) / 55, 0, 1);
+    const sunPower = clamp((source.direct_radiation ?? 0) / 700, 0, 1);
+    const _sw = source.shortwave_radiation ?? 0;
+    const _dir = source.direct_radiation ?? 0;
+    // clearSkyRatio = direct/shortwave: 0=zataženo/difuzní, 1=čisté přímé slunce
+    const clearSkyRatio = _sw > 20 ? clamp(_dir / _sw, 0, 1) : null;
+    const rawCloud = source.cloud_cover ?? 0;
+    const cloudLow = source.cloud_cover_low ?? null;
+    const cloudMid = source.cloud_cover_mid ?? null;
+    const cloudHigh = source.cloud_cover_high ?? null;
+    const visualForName = computeVisualCloud({
+        cloud: rawCloud,
+        cloudLow,
+        cloudMid,
+        cloudHigh,
+        sunPower,
+        clearSkyRatio,
+        weatherCode,
+        fog: isFogCode(weatherCode)
+    }).visualCloud;
+    const precipKind = isSnowCode(weatherCode) || snowfall > 0.05
+        ? 'snow'
+        : (isRainCode(weatherCode) || isDrizzleCode(weatherCode) || liquidPrecip > 0.05)
+            ? 'rain'
+            : 'none';
+
+    return {
+        name: getLiveWeatherName(source, visualForName),
+        temp: source.temperature_2m,
+        apparentTemp: source.apparent_temperature,
+        humidity: source.relative_humidity_2m,
+        rain: precipKind === 'rain' ? liquidPrecip : 0,
+        rainRaw: source.rain ?? 0,
+        showers: source.showers ?? 0,
+        snowfall,
+        precipTotal,
+        precipKind,
+        thunderstorm: thunderstormActive,
+        lightningActive,
+        lightningPotential,
+        fog: isFogCode(weatherCode),
+        cloud: rawCloud,
+        cloudLow,
+        cloudMid,
+        cloudHigh,
+        visibility: source.visibility ?? null,
+        sunPower,
+        clearSkyRatio,
+        weatherCode,
+        wind: Math.sin((source.wind_direction_10m ?? 0) * Math.PI / 180) * windAmp,
+        windSpeed: source.wind_speed_10m ?? 0,
+        gusts: source.wind_gusts_10m ?? 0,
+        isDay: source.is_day === 1,
+        sunriseHour: parseHourValue(payload?.daily?.sunrise?.[0]) ?? SUNRISE,
+        sunsetHour: parseHourValue(payload?.daily?.sunset?.[0]) ?? SUNSET,
+        hour
+    };
+}
+
+function syncLiveWeatherFromForecast() {
+    if (mode !== 'live' || !liveForecast?.payload || !liveForecast?.currentSource) return;
+    const nowHour = currentLocalHour();
+    const targetHour = liveForecast.targetHour ?? nowHour;
+    const anchorHour = liveForecast.anchorHour ?? nowHour;
+    // Ochrana před přechodem přes půlnoc: pokud nowHour < anchorHour,
+    // přidáme 24h offset aby blend neklesl na t=0
+    const nowAdj = nowHour < anchorHour - 12 ? nowHour + 24 : nowHour;
+    const t = targetHour > anchorHour
+        ? clamp((nowAdj - anchorHour) / (targetHour - anchorHour), 0, 1)
+        : 0;
+    const source = blendWeatherSources(liveForecast.currentSource, liveForecast.targetSource, t);
+    applyWeather(buildLiveWeatherState(source, liveForecast.payload, nowHour));
+}
+
+// ── CLOUD SYSTEM ─────────────────────────────────────────────────────────────
+// Each cloud pre-rendered to offscreen canvas with blur filter (no flicker,
+// soft edges, no hard seam lines). Rebuilt only when colour changes.
+
+let cloudPuffs = [];
+let cDensity=0, cWind=0, cStorm=0, cDL=1;
+let _firstApply=true;
+let fDensity=0, fWind=0;
+// Smooth targets — applyWeather writes these; frame loop eases toward them
+let _tDensity=0, _tWind=0, _tStorm=0, _tFDensity=0, _tRainLvl=0;
+let _sRainLvl=0; // smoothed rain level used in drawRain
+let cloudLayoutBucket = -1;
+
+// Cloud clusters — groups that leave clear gaps between them at low density
+let cloudClusters = [];
+function initClusters() {
+    const n = 2 + Math.floor(Math.random() * 3);
+    cloudClusters = [];
+    for (let i = 0; i < n; i++) {
+        cloudClusters.push({
+            cx: 0.14 + Math.random() * 0.72,
+            drift: (Math.random() < 0.5 ? 1 : -1) * (0.00022 + Math.random() * 0.00032),
+            swayAmp: 0.012 + Math.random() * 0.03,
+            swayPhase: Math.random() * Math.PI * 2,
+            stretch: 0.66 + Math.random() * 0.26,
         });
     }
 }
 
-function updateRain(w) {
-    raining = w.precipitation >= 0.1;
-    if (raining) initRain();
+function _ck(cr,cg,cb){ return `${Math.round(cr/4)*4},${Math.round(cg/4)*4},${Math.round(cb/4)*4}`; }
+
+// Layer weights derived from API cloud data — updated by initClouds()
+let _cloudLayerWeights = [0.28, 0.27, 0.25, 0.20]; // [layer0=high, layer1=mid, layer2=low, layer3=low-front]
+
+function _computeCloudLayerWeights() {
+    const low  = W.cloudLow  ?? -1;
+    const mid  = W.cloudMid  ?? -1;
+    const high = W.cloudHigh ?? -1;
+    const hasData = low >= 0 || mid >= 0 || high >= 0;
+    if (!hasData) {
+        _cloudLayerWeights = [0.28, 0.27, 0.25, 0.20];
+        return;
+    }
+    // Normalize to 0-1 coverage fractions
+    const fHigh = clamp((high >= 0 ? high : 0) / 100, 0, 1);
+    const fMid  = clamp((mid  >= 0 ? mid  : 0) / 100, 0, 1);
+    const fLow  = clamp((low  >= 0 ? low  : 0) / 100, 1e-3, 1);
+    // layer 0 = highest/cirrus, layer 1 = altostratus/mid, layer 2-3 = low cumulus
+    // Add small floor so even absent layers have a few representative puffs
+    const w0 = fHigh * 0.4 + 0.05;
+    const w1 = fMid  * 0.9 + 0.08;
+    const w2 = fLow  * 0.65 + 0.06;
+    const w3 = fLow  * 0.35 + 0.04;
+    const total = w0 + w1 + w2 + w3;
+    _cloudLayerWeights = [w0/total, w1/total, w2/total, w3/total];
 }
 
-function drawRain() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function randomPuff() {
+    const cloudletsMode = cloudStyleMode === 'cloudlets';
+    const isMini = false;
+    // 4 vrstvy: 0=cirrus/vysoké, 1=altostratus/střední, 2=cumulus/nízké, 3=nízké popředí
+    // Vrstva se volí váhovaně podle API dat cloudHigh/cloudMid/cloudLow
+    let layer;
+    if (cloudletsMode) {
+        layer = Math.random() < 0.65 ? 1 : 0;
+    } else {
+        const [w0, w1, w2, w3] = _cloudLayerWeights;
+        const r = Math.random();
+        layer = r < w0 ? 0 : r < w0+w1 ? 1 : r < w0+w1+w2 ? 2 : 3;
+    }
+    // Y-pásma: vrstva 0 = horní část nebe (cirrus), vrstva 3 = nízko (stratocumulus)
+    const yBases  = [0.02, 0.18, 0.36, 0.54];
+    const yRanges = [0.10, 0.13, 0.14, 0.18];
+    // Layer 0 = cirrus (high, wispy, fast-drifting); layer 3 = low cumulus (slow, dense)
+    const speedMul = [1.40, 0.85, 0.60, 0.38]; // cirrus drifts fastest at altitude
+    const scaleMul = cloudletsMode ? [0.52, 0.74, 0.98, 0.3] : [0.30, 0.60, 0.92, 1.22];
+    // Cirrus = few elongated blobs, very transparent; low cumulus = many blobs, dense
+    const blobMin  = [2, 4, 6, 7];
+    const blobVar  = [2, 4, 5, 5];
+    const opacBase = [0.22, 0.44, 0.62, 0.76]; // cirrus much more translucent
+    const blobCount = isMini
+        ? (cloudletsMode ? (2 + Math.floor(Math.random() * 3)) : (2 + Math.floor(Math.random() * 5)))
+        : (cloudletsMode ? (3 + Math.floor(Math.random() * 4)) : (blobMin[layer] + Math.floor(Math.random() * blobVar[layer])));
+    // Cirrus (layer 0): very wide and flat streaks; low cumulus (layer 3): taller puffs
+    const wMul = layer === 0 ? 1.9 : layer === 1 ? 1.2 : 1.0;
+    const hMul = layer === 0 ? 0.5 : layer === 1 ? 0.8 : 1.0;
+    const baseW = (260 + Math.random() * 380) * scaleMul[layer] * wMul;
+    const baseH = (90  + Math.random() * 100) * scaleMul[layer] * hMul;
+    const baseY = CH * (yBases[layer] + Math.random() * yRanges[layer]);
+    const pad   = isMini ? 24 : 80;
+    const canvW = Math.ceil(baseW * 2.6 + pad * 2);
+    const canvH = Math.ceil(baseH * 2.6 + pad * 2);
+    return {
+        x: Math.random() * (CW + baseW * 2) - baseW,
+        y: baseY,
+        baseY,
+        layer, baseW, baseH, pad, canvW, canvH,
+        cx: canvW / 2, cy: canvH / 2,
+        speed: (0.03 + Math.random() * 0.07) * speedMul[layer],
+        wobblePhase: Math.random() * Math.PI * 2,
+        wobbleAmp: (8 + Math.random() * 15) * (isMini ? 1.15 : 1),
+        wobbleFreq: 0.06 + Math.random() * 0.09,
+        xSwayAmp: 3 + Math.random() * 9,
+        floatDrift: (Math.random() - 0.5) * (isMini ? 0.042 : 0.026),
+        pulseAmp: 0.03 + Math.random() * 0.07,
+        pulsePhase: Math.random() * Math.PI * 2,
+        flowPhase: Math.random() * Math.PI * 2,
+        flowAmp: 6 + Math.random() * 16,
+        blobs: Array.from({length: blobCount}, () => ({
+            dx: (Math.random() - 0.5) * baseW * 1.6,
+            dy: (Math.random() - 0.5) * 50 * scaleMul[layer],
+            rx: (55 + Math.random() * 120) * scaleMul[layer],
+            ry: (32 + Math.random() * 58)  * scaleMul[layer],
+        })),
+        opacity: isMini ? (cloudletsMode ? 1.0 + Math.random() * 0.12 : 0.9 + Math.random() * 0.12) : (opacBase[layer] + Math.random() * 0.22),
+        isBright: isMini ? true : Math.random() < 0.35,
+        isMini,
+        osc: null, colorKey: '',
+        fadeIn: 0,   // 0..1, ramps up over ~3s after spawn
+    };
+}
 
-    if (raining) {
-        ctx.strokeStyle = "#aaa";
+function _buildCloudOSC(p, cr, cg, cb) {
+    const osc = createBufferCanvas(p.canvW, p.canvH);
+    const oc  = osc.getContext('2d');
+    oc.clearRect(0, 0, p.canvW, p.canvH);
 
-        for (let d of drops) {
-            ctx.beginPath();
-            ctx.moveTo(d.x, d.y);
-            ctx.lineTo(d.x + 2, d.y + d.length);
-            ctx.stroke();
+    const col = `${cr},${cg},${cb}`;
 
-            d.y += d.speed;
-            if (d.y > canvas.height) d.y = -20;
+    // Nakreslíme bloby BEZ filtru na pomocný buffer, pak ho rozblurujeme
+    // Tím se vyhneme problémům s filter+save/restore v různých prohlížečích
+    const tmp = createBufferCanvas(p.canvW, p.canvH);
+    const tc  = tmp.getContext('2d');
+
+    for (const b of p.blobs) {
+        const bx = p.cx + b.dx;
+        const by = p.cy + b.dy;
+        const r  = Math.max(b.rx, b.ry);
+
+        // Halo — velmi měkké rozplývání do okolí
+        const g1 = tc.createRadialGradient(bx, by, r * 0.2, bx, by, r * 2.4);
+        g1.addColorStop(0,   `rgba(${col},0.82)`);
+        g1.addColorStop(0.35,`rgba(${col},0.55)`);
+        g1.addColorStop(0.7, `rgba(${col},0.18)`);
+        g1.addColorStop(1,   `rgba(${col},0)`);
+        tc.save(); tc.translate(bx, by); tc.scale(b.rx / r * 2.0, b.ry / r * 1.1);
+        tc.beginPath(); tc.arc(0, 0, r, 0, Math.PI * 2);
+        tc.fillStyle = g1; tc.fill(); tc.restore();
+
+        // Jádro — solidnější střed
+        const g2 = tc.createRadialGradient(bx, by, 0, bx, by, r * 0.85);
+        g2.addColorStop(0,   `rgba(${col},0.98)`);
+        g2.addColorStop(0.5, `rgba(${col},0.85)`);
+        g2.addColorStop(1,   `rgba(${col},0.50)`);
+        tc.save(); tc.translate(bx, by); tc.scale(b.rx / r, b.ry / r * 0.75);
+        tc.beginPath(); tc.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+        tc.fillStyle = g2; tc.fill(); tc.restore();
+    }
+
+    // Highlight
+    const hiA = p.isBright ? 0.28 : 0.14;
+    for (const b of p.blobs) {
+        const bx = p.cx + b.dx - b.rx * 0.1;
+        const by = p.cy + b.dy - b.ry * 0.25;
+        const r  = Math.max(b.rx, b.ry) * 0.6;
+        const gh = tc.createRadialGradient(bx, by, 0, bx, by, r);
+        gh.addColorStop(0,   `rgba(255,255,255,${hiA})`);
+        gh.addColorStop(0.55,`rgba(255,255,255,${(hiA * 0.25).toFixed(3)})`);
+        gh.addColorStop(1,   'rgba(255,255,255,0)');
+        tc.save(); tc.translate(bx, by); tc.scale(b.rx / r * 0.85, b.ry / r * 0.55);
+        tc.beginPath(); tc.arc(0, 0, r, 0, Math.PI * 2);
+        tc.fillStyle = gh; tc.fill(); tc.restore();
+    }
+
+    // Aplikuj blur na hlavní canvas — filter nastavíme jednou před drawImage
+    const blurPx = IS_LOWEND ? 14 : 28;
+    oc.filter = `blur(${blurPx}px)`;
+    oc.drawImage(tmp, 0, 0);
+    oc.filter = 'none';
+
+    p.osc = osc;
+    p.colorKey = _ck(cr, cg, cb);
+}
+
+function initClouds() {
+    _computeCloudLayerWeights();
+    cloudPuffs = [];
+    initClusters();
+    const targetCount = cloudStyleMode === 'cloudlets' ? NUM_CLOUDS + 22 : NUM_CLOUDS;
+    for (let i = 0; i < targetCount; i++) {
+        const p = randomPuff();
+        p.x = Math.random() * CW;
+        p.fadeIn = 1; // already in scene — no fade-in on first load
+        cloudPuffs.push(p);
+    }
+}
+
+function drawClouds(t) {
+    if (cDensity <= 0.01) return;
+
+    const hour = getRenderHour();
+    const twi  = getTwilightInfo(hour, W.cloud ?? 0);
+    const windDir = Math.abs(cWind) < 0.02 ? 1 : Math.sign(cWind);
+    const windAbs = Math.abs(cWind);
+    const wp   = cWind * 0.24;
+
+    // Drift clusters slowly over time
+    for (const cl of cloudClusters) {
+        const clusterDrift = cl.drift * (0.35 + windAbs * 1.55) * windDir;
+        cl.cx = ((cl.cx + clusterDrift + wp * 0.00034) + 1.5) % 1.5 - 0.25;
+    }
+
+    // At low density, clusters are narrow → clear gaps; at high density they
+    // overlap and cover the whole sky. halfWidth scales from ~0.18 to ~0.75.
+    const clusterHalfW = lerp(0.075, 0.58, Math.pow(cDensity, 0.82));
+
+    const partialSky = clamp((0.58 - cDensity) / 0.58, 0, 1);
+    const brightness = lerp(0.8, 1.0, cDL) * lerp(1.0, 0.62, cStorm) * lerp(0.94, 1, cDensity);
+    // Přes den bílé mraky s teplým nádechem, v noci šedé
+    let cr = Math.round(lerp(176, 246, cDL) * brightness);
+    let cg = Math.round(lerp(182, 245, cDL) * brightness);
+    let cb = Math.round(lerp(192, 240, cDL) * brightness);
+    if (twi.intensity > 0.01) {
+        const tint = twi.phase === 'sunset' ? [255, 172, 130] : [255, 198, 158];
+        const mix  = twi.intensity * lerp(0.05, 0.20, cDensity);
+        cr = Math.round(lerp(cr, tint[0], mix));
+        cg = Math.round(lerp(cg, tint[1], mix));
+        cb = Math.round(lerp(cb, tint[2], mix));
+    }
+    // Partly-cloudy sun brightness: push cloud colour toward bright white
+    const sunnyPartialBoost = clamp((cDL - 0.68) / 0.32, 0, 1) * clamp((0.52 - cDensity) / 0.42, 0, 1);
+    if (sunnyPartialBoost > 0) {
+        cr = Math.round(lerp(cr, 255, sunnyPartialBoost * 0.55));
+        cg = Math.round(lerp(cg, 255, sunnyPartialBoost * 0.52));
+        cb = Math.round(lerp(cb, 252, sunnyPartialBoost * 0.48));
+    }
+    const currentKey = _ck(cr, cg, cb);
+
+    // Kreslit od nejzadnější vrstvy dopředu — perspektivní překrývání
+    // Doplňovač — při nízkém počtu puffů (windDir≈0 nebo po resize) doplnit chybějící
+    const targetCount = cloudStyleMode === 'cloudlets' ? NUM_CLOUDS + 22 : NUM_CLOUDS;
+    if (cDensity > 0.05 && cloudPuffs.length < targetCount) {
+        const missing = targetCount - cloudPuffs.length;
+        for (let i = 0; i < missing; i++) {
+            const np = randomPuff();
+            np.x = Math.random() * CW;
+            np.fadeIn = 0; // fade-in aby se neobjevily naráz
+            cloudPuffs.push(np);
+        }
+    }
+    const sortedPuffs = [...cloudPuffs].sort((a, b) => a.layer - b.layer);
+
+    for (const p of sortedPuffs) {
+        const layerFlow = 0.42 + p.layer * 0.26;
+        const waveDrift = Math.sin(t * (0.12 + p.layer * 0.025) + p.flowPhase) * p.flowAmp * windDir;
+        const travelSpeed = p.speed * (0.12 + windAbs * (0.55 + p.layer * 0.10)) * windDir;
+        const gustSway = Math.sin(t * 0.2 + p.wobblePhase) * p.xSwayAmp * (0.018 + windAbs * 0.04) * windDir;
+        p.x += travelSpeed + wp * (0.5 + p.layer * 0.22) + gustSway;
+        p.baseY += p.floatDrift;
+        p.y = p.baseY
+            + Math.sin(t * p.wobbleFreq + p.wobblePhase) * p.wobbleAmp
+            + Math.cos(t * (p.wobbleFreq * 0.55) + p.wobblePhase) * (p.wobbleAmp * 0.34)
+            + Math.sin(t * (0.09 + p.layer * 0.03) + p.flowPhase) * layerFlow * (1.9 + windAbs * 2.4);
+
+        // Respawn při přeletu přes okraj (při větru)
+        if (windDir > 0 && p.x - p.baseW * 1.4 > CW + 100) {
+            const np = randomPuff(); np.x = -np.baseW * 1.4 - Math.random() * 180; np.fadeIn = 0;
+            Object.assign(p, np); continue;
+        }
+        if (windDir < 0 && p.x + p.baseW * 1.4 < -100) {
+            const np = randomPuff(); np.x = CW + np.baseW * 1.4 + Math.random() * 180; np.fadeIn = 0;
+            Object.assign(p, np); continue;
+        }
+        if (windDir > 0 && p.x + p.baseW * 1.6 < -220) {
+            const np = randomPuff(); np.x = -np.baseW * 1.4 - Math.random() * 180; np.fadeIn = 0;
+            Object.assign(p, np); continue;
+        }
+        if (windDir < 0 && p.x - p.baseW * 1.6 > CW + 220) {
+            const np = randomPuff(); np.x = CW + np.baseW * 1.4 + Math.random() * 180; np.fadeIn = 0;
+            Object.assign(p, np); continue;
+        }
+        // Záchranný respawn — puff se nějak ocitl zcela mimo canvas (>2× šířka)
+        if (p.x < -CW * 1.5 || p.x > CW * 2.5) {
+            const np = randomPuff(); np.x = Math.random() * CW; np.fadeIn = 0;
+            Object.assign(p, np); continue;
+        }
+
+        // Rebuild texture only when colour/density changes — not every frame
+        if (!p.osc || p.colorKey !== currentKey) {
+            _buildCloudOSC(p, cr, cg, cb);
+        }
+
+        // halfWidth: polojasno = kompaktní shluky s modrými mezerami, zataženo = pokryv
+        // Při nízkém cDensity jsou clustery ÚZKÉ → jasné modré mezery mezi nimi
+        // Ale clusterů je dost (3-5) → každý viditelný shluk je plně bílý
+        const clusterHalfW = lerp(0.075, 0.66, Math.pow(cDensity, 0.56));
+
+        const xNorm = p.x / CW;
+        let rawCluster = 0;
+        // Při plném zataženu přeskočit cluster výpočet — pokryj vše
+        if (cDensity >= 0.88) {
+            rawCluster = 1.0;
+        } else {
+            for (const cl of cloudClusters) {
+                const dist = Math.abs(xNorm - cl.cx) / (clusterHalfW * cl.stretch);
+                rawCluster = Math.max(rawCluster, Math.pow(clamp((Math.cos(Math.min(dist, 1) * Math.PI) + 1) * 0.5, 0, 1), 1.35));
+            }
+            const clusterFloor = cDensity > 0.55 ? lerp(0, 1.0, (cDensity - 0.55) / 0.33) : 0;
+            rawCluster = Math.max(rawCluster, clusterFloor);
+        }
+        // Floor: puffs mimo cluster nejsou zcela neviditelné — při polojasnu
+        // (cDensity 0.1–0.5) mají minimum 0.25–0.55 aby nevymizely ze scény.
+        const coverageFloor = lerp(0.0, 0.55, clamp(cDensity / 0.5, 0, 1));
+        const rawCoverage = Math.max(rawCluster, coverageFloor);
+
+        // Smooth coverage — velmi pomalá interpolace → žádné skoky v alpha
+        if (p.smoothCoverage === undefined) p.smoothCoverage = rawCoverage;
+        p.smoothCoverage += (rawCoverage - p.smoothCoverage) * 0.018;
+        const coverageFactor = p.smoothCoverage;
+
+        // Fade-in: new clouds ramp from 0→1 over ~3s (180 frames @ 60fps)
+        if (p.fadeIn === undefined) p.fadeIn = 1;
+        p.fadeIn = Math.min(1, p.fadeIn + 0.0042);
+        const fadeInFactor = p.fadeIn * p.fadeIn; // ease-in curve
+
+        const dayBoost = lerp(0.84, 1.02, cDL);
+        const layerBoost = p.layer === 0 ? 1.06 : p.layer === 1 ? 1.02 : 1;
+        // Partly-cloudy sunny boost: low density + high daylight = extra bright white clouds
+        const partialSunBoost = lerp(1.0, 1.22, clamp((cDL - 0.7) / 0.3, 0, 1) * clamp((0.55 - cDensity) / 0.45, 0, 1));
+        // baseAlpha: při nízkém density výraznější než dřív — polojasno musí být čitelné
+        const baseAlpha = cDensity < 0.12
+            ? lerp(0.0, 0.78, cDensity / 0.12)
+            : cDensity < 0.5
+                ? lerp(0.78, p.opacity * 1.08, (cDensity - 0.12) / 0.38)
+                : lerp(p.opacity * 1.08, p.opacity * 1.35, (cDensity - 0.5) / 0.5);
+        const alpha = clamp(baseAlpha * coverageFactor * dayBoost * layerBoost * partialSunBoost * fadeInFactor, 0, p.isBright ? 0.98 : 0.92);
+        if (alpha < 0.008) continue;
+
+        const drawW = p.canvW;
+        const drawH = p.canvH;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(
+            p.osc,
+            Math.round(p.x + waveDrift - drawW * 0.5),
+            Math.round(p.y - drawH * 0.5),
+            drawW,
+            drawH
+        );
+        ctx.globalAlpha = 1;
+    }
+}
+
+// ── CLOUD BLUR OVERLAY ────────────────────────────────────────────────────────
+// Při vysoké oblačnosti přikryje ostré okraje mraků a sjednotí je s oblohou.
+// Funguje jako softbox: průhledný při nízkém cDensity, plný při cDensity→1.
+function drawCloudBlurOverlay(fc, dl, cloud) {
+    const t = clamp((cDensity - 0.15) / 0.45, 0, 1);
+    if (t < 0.01) return;
+
+    // Při dešti/bouři ztmavit víc — base barva musí sledovat dl (noc/soumrak)
+    const rainBoost = clamp((W.rain ?? 0) / 8, 0, 1);
+    const dlF = dl < 0.24 ? lerp(0.025, 0.38, smoothstep(0, 0.24, dl)) : lerp(0.38, 1, smoothstep(0.24, 1, dl));
+    const darkR = Math.round(lerp(172, 110, rainBoost) * dlF);
+    const darkG = Math.round(lerp(178, 118, rainBoost) * dlF);
+    const darkB = Math.round(lerp(188, 130, rainBoost) * dlF);
+
+    const overR = Math.round(lerp(fc[0], darkR, t * 0.88));
+    const overG = Math.round(lerp(fc[1], darkG, t * 0.88));
+    const overB = Math.round(lerp(fc[2], darkB, t * 0.88));
+
+    const g = ctx.createLinearGradient(0, 0, 0, CH * 0.85);
+    const topA = t * lerp(0.22, 0.72, t);
+    const midA = t * lerp(0.12, 0.50, t);
+    const botA = t * lerp(0.03, 0.22, t);
+    g.addColorStop(0,    `rgba(${overR},${overG},${overB},${topA.toFixed(3)})`);
+    g.addColorStop(0.38, `rgba(${overR},${overG},${overB},${midA.toFixed(3)})`);
+    g.addColorStop(0.75, `rgba(${overR},${overG},${overB},${botA.toFixed(3)})`);
+    g.addColorStop(1,    `rgba(${overR},${overG},${overB},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CW, CH * 0.85);
+}
+
+function drawCloudLayerVeils(dl) {
+    const low  = W.cloudLow  ?? 0;
+    const mid  = W.cloudMid  ?? 0;
+    const high = W.cloudHigh ?? 0;
+    if (low < 2 && mid < 2 && high < 2) return;
+
+    const dayLift = lerp(0.55, 1, dl);
+
+    // ── HIGH (cirrus) ────────────────────────────────────────────────────────
+    // Cirrus je průsvitný — jen jemný nádech v úplném vrcholu nebe.
+    // Kvadratická křivka: při nízkém pokrytí téměř neviditelný, max alfa 0.07.
+    if (high >= 10) {
+        const t = clamp((high - 10) / 90, 0, 1);
+        const highA = t * t * 0.07 * dayLift;
+        const hc = applyLight([230, 234, 240], dl);
+        const highG = ctx.createLinearGradient(0, 0, 0, CH * 0.30);
+        highG.addColorStop(0,   `rgba(${hc[0]},${hc[1]},${hc[2]},${highA})`);
+        highG.addColorStop(0.6, `rgba(${hc[0]},${hc[1]},${hc[2]},${highA * 0.35})`);
+        highG.addColorStop(1,   `rgba(${hc[0]},${hc[1]},${hc[2]},0)`);
+        ctx.fillStyle = highG;
+        ctx.fillRect(0, 0, CW, CH * 0.30);
+    }
+
+    // ── MID (altostratus) ────────────────────────────────────────────────────
+    // Šedivá vrstva zabírající střední pásmo nebe — začíná výše, sahá dolů
+    if (mid >= 5) {
+        const midA = clamp(mid / 100, 0, 1) * 0.28 * dayLift;
+        const mc = applyLight([188, 196, 208], dl);
+        const midG = ctx.createLinearGradient(0, CH * 0.10, 0, CH * 0.78);
+        midG.addColorStop(0,    `rgba(${mc[0]},${mc[1]},${mc[2]},0)`);
+        midG.addColorStop(0.22, `rgba(${mc[0]},${mc[1]},${mc[2]},${midA * 0.72})`);
+        midG.addColorStop(0.52, `rgba(${mc[0]},${mc[1]},${mc[2]},${midA})`);
+        midG.addColorStop(1,    `rgba(${mc[0]},${mc[1]},${mc[2]},${midA * 0.35})`);
+        ctx.fillStyle = midG;
+        ctx.fillRect(0, CH * 0.10, CW, CH * 0.68);
+    }
+
+    // ── LOW (stratocumulus) ──────────────────────────────────────────────────
+    // Tmavší, hustší vrstva v dolní části nebe — dominuje zorné pole, potlačuje světlo
+    if (low >= 5) {
+        const lowA = clamp(low / 100, 0, 1) * 0.40 * dayLift;
+        const lc = applyLight([158, 166, 178], dl);
+        // Gradient: silný ve středním a dolním pásmu, fade nahoře
+        const lowG = ctx.createLinearGradient(0, CH * 0.28, 0, CH);
+        lowG.addColorStop(0,    `rgba(${lc[0]},${lc[1]},${lc[2]},0)`);
+        lowG.addColorStop(0.18, `rgba(${lc[0]},${lc[1]},${lc[2]},${lowA * 0.55})`);
+        lowG.addColorStop(0.48, `rgba(${lc[0]},${lc[1]},${lc[2]},${lowA})`);
+        lowG.addColorStop(0.82, `rgba(${lc[0]},${lc[1]},${lc[2]},${lowA * 0.75})`);
+        lowG.addColorStop(1,    `rgba(${lc[0]},${lc[1]},${lc[2]},${lowA * 0.42})`);
+        ctx.fillStyle = lowG;
+        ctx.fillRect(0, CH * 0.28, CW, CH * 0.72);
+    }
+}
+
+function drawOvercastVeil(dl, cloud) {
+    const total = W.cloud ?? cloud;
+    const overcast = Math.max(smoothstep(82, 96, total), W.weatherCode === 3 ? 0.74 : 0);
+    if (overcast <= 0.01) return;
+    const veilGrey = applyLight([160, 168, 178], dl);
+    const g = ctx.createLinearGradient(0, 0, 0, CH);
+    g.addColorStop(0, `rgba(${veilGrey[0]},${veilGrey[1]},${veilGrey[2]},${overcast * 0.72})`);
+    g.addColorStop(0.58, `rgba(${veilGrey[0]},${veilGrey[1]},${veilGrey[2]},${overcast * 0.62})`);
+    g.addColorStop(1, `rgba(${veilGrey[0]},${veilGrey[1]},${veilGrey[2]},${overcast * 0.42})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CW, CH);
+}
+let fogPuffs = [], fogOSC = {};
+
+function getFogPatch(rx, ry, layer) {
+    const key = `${Math.round(rx / 20) * 20}x${Math.round(ry / 10) * 10}-${layer}`;
+    if (fogOSC[key]) return fogOSC[key];
+    const w = Math.max(2, Math.round(rx * 2 + 4));
+    const h = Math.max(2, Math.round(ry * 2 + 4));
+    const osc = createBufferCanvas(w, h), oc = osc.getContext('2d');
+    const cx = w * 0.5, cy = h * 0.5;
+    const layers = [
+        {dx:-0.18, dy: 0.02, sx:1.05, sy:1.00, a:0.16},
+        {dx: 0.14, dy:-0.08, sx:0.92, sy:0.84, a:0.13},
+        {dx: 0.31, dy: 0.10, sx:0.68, sy:0.72, a:0.08}
+    ];
+    for (const l of layers) {
+        oc.save();
+        oc.translate(cx + rx * l.dx, cy + ry * l.dy);
+        oc.scale(rx * l.sx, ry * l.sy);
+        const g = oc.createRadialGradient(0, 0, 0.08, 0, 0, 1);
+        g.addColorStop(0, `rgba(244,245,247,${l.a})`);
+        g.addColorStop(0.36, `rgba(239,241,243,${l.a * 0.72})`);
+        g.addColorStop(0.74, `rgba(232,235,238,${l.a * 0.30})`);
+        g.addColorStop(1, 'rgba(228,231,234,0)');
+        oc.fillStyle = g;
+        oc.beginPath();
+        oc.arc(0, 0, 1, 0, Math.PI * 2);
+        oc.fill();
+        oc.restore();
+    }
+    fogOSC[key] = osc;
+    return osc;
+}
+
+function initFog() {
+    fogPuffs = [];
+    for (let i=0; i<NUM_FOG; i++) {
+        const layer=i%3, sc=layer===0?1.26:layer===1?1:0.82;
+        const rx = Math.round((Math.random()*180+200)*sc);
+        const ry = Math.round(rx * (0.20 + Math.random() * 0.16));
+        fogPuffs.push({
+            x: Math.random() * CW,
+            y: lerp(CH * 0.2, CH * 0.92, Math.pow(Math.random(), 0.82)),
+            rx, ry,
+            bA: 0.024 + Math.random() * 0.022,
+            sp: 0.014 + Math.random() * 0.055,
+            wb: Math.random() * Math.PI * 2,
+            swayX: 10 + Math.random() * 24,
+            swayY: 4 + Math.random() * 14,
+            layer
+        });
+    }
+}
+
+function drawFog(t) {
+    if (fDensity <= 0.01) return;
+    const bo = clamp(fDensity * 0.58, 0, 1.1), wp = fWind * 0.16;
+    for (const p of fogPuffs) {
+        p.x += p.sp + wp * (1 + p.layer * 0.3);
+        if (p.x - p.rx > CW + 120) { p.x = -p.rx - Math.random() * 180; p.y = lerp(CH * 0.24, CH * 0.94, Math.pow(Math.random(), 0.82)); }
+        if (p.x + p.rx < -180)     { p.x = CW + p.rx + Math.random() * 180; p.y = lerp(CH * 0.24, CH * 0.94, Math.pow(Math.random(), 0.82)); }
+        const drawX = p.x + Math.sin(t * (0.045 + p.layer * 0.012) + p.wb) * p.swayX;
+        const drawY = p.y + Math.sin(t * (0.07 + p.layer * 0.015) + p.wb * 1.7) * p.swayY;
+        const pulse = 0.92 + Math.sin(t * (0.18 + p.layer * 0.03) + p.wb) * 0.08;
+        const alpha = p.bA * bo * pulse;
+        if (alpha < 0.008) continue;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(getFogPatch(p.rx, p.ry, p.layer), Math.round(drawX - p.rx), Math.round(drawY - p.ry));
+        ctx.globalAlpha = 1;
+    }
+    const lowFog = ctx.createLinearGradient(0,0,0,CH);
+    lowFog.addColorStop(0,   `rgba(234,236,238,0)`);
+    lowFog.addColorStop(0.12,`rgba(234,236,238,${bo*0.03})`);
+    lowFog.addColorStop(0.44,`rgba(233,235,237,${bo*0.11})`);
+    lowFog.addColorStop(0.78,`rgba(231,233,236,${bo*0.22})`);
+    lowFog.addColorStop(1,   `rgba(226,229,232,${bo*0.34})`);
+    ctx.fillStyle=lowFog; ctx.fillRect(0,0,CW,CH);
+    const midVeil = ctx.createLinearGradient(0, CH * 0.08, 0, CH * 0.88);
+    midVeil.addColorStop(0,    `rgba(240,242,244,${bo * 0.03})`);
+    midVeil.addColorStop(0.28, `rgba(238,240,242,${bo * 0.06})`);
+    midVeil.addColorStop(0.62, `rgba(236,238,240,${bo * 0.05})`);
+    midVeil.addColorStop(1,    'rgba(234,236,238,0)');
+    ctx.fillStyle = midVeil;
+    ctx.fillRect(0, 0, CW, CH);
+}
+
+// ── SKY ───────────────────────────────────────────────────────────────────────
+function drawTwilightTint(hour,cloud) {
+    const twi=getTwilightInfo(hour,cloud);
+    if(twi.intensity<=0.01) return;
+    const isSunset=twi.phase==='sunset';
+    const horizonY=CH*(isSunset?0.8:0.76), cx=CW*(isSunset?0.2:0.8);
+    const warm=isSunset?[255,164,122]:[255,188,138];
+    const rose=isSunset?[255,132,146]:[255,170,150];
+    const hg=ctx.createRadialGradient(cx,horizonY,16,cx,horizonY,CH*0.52);
+    hg.addColorStop(0,`rgba(${warm[0]},${warm[1]},${warm[2]},${twi.intensity*0.18})`);
+    hg.addColorStop(0.46,`rgba(${rose[0]},${rose[1]},${rose[2]},${twi.intensity*0.1})`);
+    hg.addColorStop(1,`rgba(${rose[0]},${rose[1]},${rose[2]},0)`);
+    ctx.fillStyle=hg; ctx.fillRect(0,0,CW,CH);
+    const sw=ctx.createLinearGradient(0,0,0,CH);
+    sw.addColorStop(0,'rgba(255,170,150,0)');
+    sw.addColorStop(0.1,'rgba(255,170,150,0)');
+    sw.addColorStop(0.55,`rgba(${warm[0]},${warm[1]},${warm[2]},${twi.intensity*0.035})`);
+    sw.addColorStop(1,`rgba(${rose[0]},${rose[1]},${rose[2]},${twi.intensity*0.09})`);
+    ctx.fillStyle=sw; ctx.fillRect(0,0,CW,CH);
+}
+
+function drawSkyBackdrop(fc,dl,cloud,hour) {
+    const twi=getTwilightInfo(hour,cloud);
+    const zenith=mixRgb(fc,[Math.max(0,fc[0]-18),Math.max(0,fc[1]-10),Math.max(0,fc[2]-2)],lerp(0.18,0.32,dl));
+    // overcast: šednout oblohu dřív — při cloud=42 už viditelně šedá
+    const overcast = smoothstep(35, 78, cloud);
+    const cloudGrey = applyLight([150, 157, 166], dl);
+    const zenithCloud = mixRgb(zenith, cloudGrey, overcast * 0.86);
+    const horizonBase=mixRgb(fc,applyLight([238,242,248],dl),clamp(0.18+cloud/100*0.18,0.14,0.42));
+    const horizonCloud = mixRgb(horizonBase, applyLight([178, 184, 192], dl), overcast * 0.78);
+    let horizon=horizonCloud;
+    if(twi.intensity>0.01){
+        const tint=twi.phase==='sunset'?[255,186,150]:[255,202,168];
+        horizon=mixRgb(horizon,tint,twi.intensity*0.32);
+    }
+    const g=ctx.createLinearGradient(0,0,0,CH);
+    g.addColorStop(0,   `rgb(${zenithCloud.join(',')})`);
+    g.addColorStop(0.18,`rgb(${mixRgb(zenith,fc,0.5).join(',')})`);
+    g.addColorStop(0.42,`rgb(${fc.join(',')})`);
+    g.addColorStop(0.72,`rgb(${mixRgb(fc,horizon,0.5).join(',')})`);
+    g.addColorStop(1,   `rgb(${horizon.join(',')})`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,CW,CH);
+    // very subtle haze at bottom only — start gradient earlier, full-canvas fillRect avoids hard edge
+    const la=ctx.createLinearGradient(0,CH*0.45,0,CH);
+    la.addColorStop(0,'rgba(255,255,255,0)');
+    la.addColorStop(0.55,'rgba(255,255,255,0)');
+    la.addColorStop(1,`rgba(255,255,255,${lerp(0.01,0.04,cloud/100)})`);
+    ctx.fillStyle=la; ctx.fillRect(0,0,CW,CH);
+}
+
+let _smogCache = {key: null, topGlow: null, horizonBand: null, lowerGlow: null, zenithVeil: null};
+
+function drawSmog(t, dl, cloud) {
+    // Světelný smog nad Prahou — subtilní:
+    // Jasná noc: jen velmi jemný teplý lem u horizontu, zbytek oblohy šedomodrý
+    // Zataženo: mraky mírně nasvícené zdola, ale stále tmavé — ne oranžové
+    const nightF = clamp(1 - dl / 0.35, 0, 1);
+    if (nightF < 0.01) return;
+
+    const pulse = 0.98 + Math.sin(t * 0.11) * 0.02;
+    // Oblačnost zesiluje odraz, ale jen mírně
+    const cloudBoost = clamp(cloud / 100 * 0.5, 0, 0.5);
+    const intens = nightF * (0.88 + cloudBoost) * pulse;
+
+    const cacheKey = Math.round(intens * 400);
+    if (_smogCache.key !== cacheKey) {
+        _smogCache.key = cacheKey;
+
+        // Jemný teplý lem u spodního horizontu — sotva patrný při jasnu,
+        // o trochu výraznější při zataženo
+        const hb = ctx.createLinearGradient(0, CH * 0.5, 0, CH);
+        hb.addColorStop(0,   `rgba(200,140,80,0)`);
+        hb.addColorStop(0.5, `rgba(210,148,82,${intens * 0.045})`);
+        hb.addColorStop(0.82,`rgba(218,152,84,${intens * 0.072})`);
+        hb.addColorStop(1,   `rgba(222,155,86,${intens * 0.058})`);
+        _smogCache.horizonBand = hb;
+
+        // Dolní dome — velmi slabý, jen naznačuje světla města
+        const lg = ctx.createRadialGradient(CW*0.5, CH*1.1, CH*0.05, CW*0.5, CH*1.1, CW*0.7);
+        lg.addColorStop(0,    `rgba(200,138,72,${intens * 0.10})`);
+        lg.addColorStop(0.35, `rgba(190,130,65,${intens * 0.05})`);
+        lg.addColorStop(0.65, `rgba(175,118,55,${intens * 0.018})`);
+        lg.addColorStop(1,    'rgba(160,105,45,0)');
+        _smogCache.lowerGlow = lg;
+
+        // Plošný nažloutlý závoj světelného smogu
+        const av = intens * 0.144;
+        const zv = ctx.createLinearGradient(0, 0, 0, CH);
+        zv.addColorStop(0,    `rgba(210,192,115,${av * 0.80})`);
+        zv.addColorStop(0.40, `rgba(212,194,112,${av * 0.95})`);
+        zv.addColorStop(0.70, `rgba(214,195,110,${av})`);
+        zv.addColorStop(1,    `rgba(215,196,108,${av * 0.88})`);
+        _smogCache.zenithVeil = zv;
+
+        _smogCache.topGlow = null; // nepoužito
+    }
+
+    ctx.fillStyle = _smogCache.horizonBand; ctx.fillRect(0, 0, CW, CH);
+    ctx.fillStyle = _smogCache.lowerGlow;   ctx.fillRect(0, 0, CW, CH);
+    ctx.fillStyle = _smogCache.zenithVeil;  ctx.fillRect(0, 0, CW, CH);
+}
+
+let vignetteOSC = null;
+
+function buildVignette() {
+    vignetteOSC = createBufferCanvas(CW, CH);
+    const vc = vignetteOSC.getContext('2d');
+    const vg = vc.createRadialGradient(CW*0.5, CH*0.5, CH*0.18, CW*0.5, CH*0.5, CW*0.88);
+    vg.addColorStop(0,    'rgba(0,0,0,0)');
+    vg.addColorStop(0.56, 'rgba(0,0,0,0.015)');
+    vg.addColorStop(0.82, 'rgba(0,0,0,0.09)');
+    vg.addColorStop(1,    'rgba(0,0,0,0.24)');
+    vc.fillStyle = vg; vc.fillRect(0,0,CW,CH);
+    const topEdge = vc.createLinearGradient(0, 0, 0, CH*0.12);
+    topEdge.addColorStop(0,   'rgba(0,0,0,0.18)');
+    topEdge.addColorStop(0.6, 'rgba(0,0,0,0.04)');
+    topEdge.addColorStop(1,   'rgba(0,0,0,0)');
+    vc.fillStyle = topEdge; vc.fillRect(0,0,CW,CH*0.12);
+    const botEdge = vc.createLinearGradient(0, CH*0.88, 0, CH);
+    botEdge.addColorStop(0,   'rgba(0,0,0,0)');
+    botEdge.addColorStop(0.5, 'rgba(0,0,0,0.09)');
+    botEdge.addColorStop(1,   'rgba(0,0,0,0.28)');
+    vc.fillStyle = botEdge; vc.fillRect(0,CH*0.88,CW,CH*0.12);
+}
+
+function drawWindowVignette() {
+    if (!vignetteOSC) buildVignette();
+    ctx.drawImage(vignetteOSC, 0, 0);
+}
+
+let starsList=[];
+function initStars(){
+    starsList=[];
+    for(let i=0;i<52;i++){
+        starsList.push([Math.random()*CW,Math.random()*CH*.72,Math.random()*1.35+.2,Math.random()*Math.PI*2]);
+    }
+}
+
+function drawStars(t,dl,cloud){
+    if(dl>=.15) return;
+    const nightT=1-dl/.15, vis=Math.max(0,1-cloud/100*2.4);
+    if(vis<.01) return;
+    for(const [sx,sy,sr,sp] of starsList){
+        const twinkle=.5+Math.sin(t*0.4+sp)*.5;
+        const a=nightT*(.08+.18*twinkle)*vis*0.28;
+        if(a<.01) continue;
+        ctx.fillStyle=`rgba(220,232,255,${a})`;
+        ctx.beginPath(); ctx.arc(sx,sy,sr,0,Math.PI*2); ctx.fill();
+    }
+}
+
+function drawSunMoon(t,dl,cloud,hour){
+    // Severní okno — slunce ani měsíc nejsou vidět (kulminují na jihu)
+    if(dl<.15) drawStars(t,dl,cloud);
+}
+
+const NUM_DROPS=600;
+let drops=[], rainDropOSC={}, snowOSC={};
+function createDrop(snow,lvl){
+    const sp=snow?[1.5,1.7]:(RAIN_SPEED[lvl]||[3,9]);
+    return {x:Math.random()*(CW+240)-120,y:Math.random()*(CH+240)-240,
+        l:snow?0:RAIN_LEN[lvl]*(.7+Math.random()*.6),
+        s:sp[0]+Math.random()*(sp[1]-sp[0]),
+        r:snow?Math.random()*1.55+0.45:0,dr:snow?Math.random()*.9+.25:0,
+        rot:snow?Math.random()*Math.PI*2:0,rotSp:snow?(Math.random()-.5)*0.08:0,
+        rough:snow?Math.random()*.9+.35:0,opVar:0.55+Math.random()*0.45};
+}
+function initRain(){
+    const snow=isSnow(W), lvl=snow?2:rainLevel(W.rain||0), count=snow?280:RAIN_DROPS[lvl];
+    drops=[]; for(let i=0;i<count;i++) drops.push(createDrop(snow,lvl));
+}
+function getRainDropCanvas(lvl){
+    if(rainDropOSC[lvl]) return rainDropOSC[lvl];
+    const len=RAIN_LEN[lvl]*1.4+8, w=Math.ceil(RAIN_WIDTH[lvl]*3+6);
+    const osc=createBufferCanvas(w,Math.ceil(len+8)), oc=osc.getContext('2d');
+    oc.clearRect(0,0,w,Math.ceil(len+8));
+    const cx=w/2, col=lvl<=2?'185,198,212':'172,186,200';
+    oc.strokeStyle=`rgba(${col},0.65)`; oc.lineWidth=RAIN_WIDTH[lvl]; oc.lineCap='round';
+    oc.filter=`blur(${RAIN_BLUR[lvl]}px)`;
+    oc.beginPath(); oc.moveTo(cx,4); oc.lineTo(cx,len+4); oc.stroke();
+    oc.filter='none';
+    rainDropOSC[lvl]=osc; return osc;
+}
+let _lastRainLvl = 0;
+// Stable rain level — only changes when _sRainLvl has been consistently
+// above/below a threshold for multiple frames, preventing per-frame texture swap.
+let _stableRainLvl = 0, _stableRainCount = 0;
+function drawRain(){
+    const snow=isSnow(W);
+    const rawLvl = Math.max(0, Math.min(Math.floor(_sRainLvl + 0.12), 4));
+    if (rawLvl !== _stableRainLvl) {
+        _stableRainCount++;
+        if (_stableRainCount >= 8) { // must hold for ~8 frames (~133ms) before switching
+            _stableRainLvl = rawLvl;
+            _stableRainCount = 0;
+            rainDropOSC = {}; // clear cache only after confirmed level change
+        }
+    } else {
+        _stableRainCount = 0;
+    }
+    const lvl = _stableRainLvl;
+    _lastRainLvl = lvl;
+    if(!raining||!drops.length||lvl===0) return;
+    const wind=W.wind||0, angle=wind*8, baseAlpha=RAIN_ALPHA[lvl];
+    function getSnowFlake(r) {
+        const key = Math.round(r * 2);
+        if (snowOSC[key]) return snowOSC[key];
+        const size = Math.ceil(r * 2 + 6);
+        const osc = createBufferCanvas(size, size);
+        const oc = osc.getContext('2d');
+        const cx = size / 2;
+        const g = oc.createRadialGradient(cx, cx, 0, cx, cx, r);
+        g.addColorStop(0,   'rgba(225,232,240,0.85)');
+        g.addColorStop(0.5, 'rgba(220,228,238,0.55)');
+        g.addColorStop(1,   'rgba(215,224,235,0)');
+        oc.filter = `blur(${Math.max(0.6, r * 0.35)}px)`;
+        oc.fillStyle = g;
+        oc.beginPath(); oc.arc(cx, cx, r, 0, Math.PI * 2); oc.fill();
+        oc.filter = 'none';
+        snowOSC[key] = osc;
+        return osc;
+    }
+
+    if(snow){
+        for(const d of drops){
+            const flake = getSnowFlake(d.r);
+            const sz = flake.width;
+            ctx.globalAlpha = 0.28 + d.opVar * 0.28;
+            ctx.drawImage(flake, Math.round(d.x - sz*0.5), Math.round(d.y - sz*0.5));
+            d.y+=d.s; d.x+=wind*d.dr+Math.sin(d.y*0.025+d.rot)*0.2; d.rot+=d.rotSp;
+            const pad=120;
+            if(d.y>CH+pad||d.x<-pad*2||d.x>CW+pad*2){
+                const nd=createDrop(true,0);
+                d.x=Math.random()*(CW+pad*2)-pad; d.y=-Math.random()*pad;
+                d.r=nd.r;d.dr=nd.dr;d.rot=nd.rot;d.rotSp=nd.rotSp;d.rough=nd.rough;d.opVar=nd.opVar;
+            }
+        }
+        ctx.globalAlpha=1; return;
+    }
+    const dropImg=getRainDropCanvas(lvl), dw=dropImg.width;
+    // Přes den je obloha světlá — zvýšit alpha aby byl déšť viditelný
+    const dlBoost = lerp(1.0, 1.9, cDL);
+    ctx.save();
+    if(Math.abs(angle)>0.5){ctx.translate(CW/2,CH/2);ctx.rotate(-Math.atan2(angle,RAIN_LEN[lvl])*0.55);ctx.translate(-CW/2,-CH/2);}
+    for(const d of drops){
+        ctx.globalAlpha=Math.min(baseAlpha*d.opVar*dlBoost, 0.72);
+        ctx.drawImage(dropImg,Math.round(d.x-dw/2),Math.round(d.y-4));
+        d.y+=d.s; d.x+=wind*2;
+        const pad=120;
+        if(d.y>CH+pad||d.x<-pad*2||d.x>CW+pad*2){
+            const nd=createDrop(false,lvl);
+            d.x=Math.random()*(CW+pad*2)-pad; d.y=-Math.random()*pad;
+            d.l=nd.l;d.s=nd.s;d.opVar=nd.opVar;
+        }
+    }
+    ctx.restore(); ctx.globalAlpha=1;
+    if(lvl>=3){
+        // Wet-atmosphere darkening — increases with rain level
+        const wetAlpha = lvl === 4 ? 0.10 : 0.04;
+        ctx.fillStyle=`rgba(130,148,165,${wetAlpha})`;ctx.fillRect(0,0,CW,CH);
+    }
+    if(lvl===4){
+        // Extra streaky curtain for downpour — a second translucent pass
+        ctx.save();
+        ctx.globalAlpha = 0.18 * cDL + 0.08;
+        if(Math.abs(angle)>0.5){ctx.translate(CW/2,CH/2);ctx.rotate(-Math.atan2(angle,RAIN_LEN[lvl])*0.35);ctx.translate(-CW/2,-CH/2);}
+        for(let i=0;i<drops.length;i+=3){
+            const d=drops[i];
+            ctx.drawImage(dropImg,Math.round(d.x-dw/2+8),Math.round(d.y-4));
+        }
+        ctx.restore(); ctx.globalAlpha=1;
+    }
+}
+
+let lightAlpha=0,lightTimer=0,lightPhase=0;
+function triggerLightning(){lightAlpha=.9;lightPhase=0;lightTimer=performance.now();}
+function drawLightning(now){
+    if(lightAlpha<=0) return;
+    const elapsed=now-lightTimer;
+    if(lightPhase===0&&elapsed>120){lightAlpha=0;lightPhase=1;lightTimer=now;}
+    else if(lightPhase===1&&elapsed>60){if(Math.random()>.5){lightAlpha=.6;lightPhase=2;lightTimer=now;}else lightAlpha=0;}
+    else if(lightPhase===2&&elapsed>80) lightAlpha=0;
+    if(lightAlpha>0){ctx.fillStyle=`rgba(255,255,255,${lightAlpha})`;ctx.fillRect(0,0,CW,CH);}
+}
+
+function updateNoise() {
+    if (noiseFrameCounter % 6 === 0) drawNoise();
+    noiseFrameCounter++;
+}
+
+let lastFrame=0, t0=performance.now(), fpsArr=[], lastFpsTime=0;
+function frame(now){
+    requestAnimationFrame(frame);
+    if(now-lastFrame<FRAME_MS-2) return;
+    const dt=now-lastFrame; lastFrame=now;
+    fpsArr.push(1000/dt); if(fpsArr.length>20) fpsArr.shift();
+    if(now-lastFpsTime>1000){
+        document.getElementById('fps').textContent=Math.round(fpsArr.reduce((a,b)=>a+b,0)/fpsArr.length)+' fps';
+        lastFpsTime=now;
+    }
+    if(!W.name) return;
+    // Ease weather visual vars toward their targets (~4s at 60fps = k≈0.012)
+    const _k = 1 - Math.pow(0.012, dt / 1000);
+    const prevDensityBucket = (cloudStyleMode === 'cloudlets' ? 10 : 0) + (cDensity < 0.18 ? 0 : cDensity < 0.5 ? 1 : cDensity < 0.78 ? 2 : 3);
+    cDensity  = lerp(cDensity,  _tDensity,  _k);
+    cWind     = lerp(cWind,     _tWind,     _k);
+    cStorm    = lerp(cStorm,    _tStorm,    _k);
+    fDensity  = lerp(fDensity,  _tFDensity, _k);
+    _sRainLvl = lerp(_sRainLvl, _tRainLvl,  _k);
+    const nextDensityBucket = (cloudStyleMode === 'cloudlets' ? 10 : 0) + (cDensity < 0.18 ? 0 : cDensity < 0.5 ? 1 : cDensity < 0.78 ? 2 : 3);
+    if (nextDensityBucket !== cloudLayoutBucket) {
+        cloudLayoutBucket = nextDensityBucket;
+        initClouds();
+    }
+    const t=(now-t0)*.001, hour=getRenderHour(), dl=getDL(hour), cloud=W.cloudVisual??W.cloud??0;
+    cDL = dl;
+    const rawCloud = W.cloud ?? cloud; // plná oblačnost pro barvu oblohy
+    const fogActive = isFog(W);
+    let bc=getBG(W.temp||15, rawCloud, W.cloudHigh ?? 0);
+    if(isSnow(W)) bc=[Math.round(bc[0]*.96),Math.round(bc[1]*.97),Math.round(bc[2]*.99)];
+    // Při dešti/mrholení: potlačit modrou → obloha šedne bez ohledu na nízké cloudTotal
+    if(raining) {
+        const rainGrey = clamp(Math.max(_sRainLvl, _tRainLvl * 0.5) / 2.5, 0, 1) * 0.85;
+        const grey = [Math.round(lerp(bc[0],bc[1],0.5)), Math.round(lerp(bc[1],bc[1],0.5)), Math.round(lerp(bc[2],bc[1],0.5))];
+        bc = bc.map((c,i) => Math.round(lerp(c, grey[i], rainGrey)));
+    }
+    const fc=applyLight(bc,dl);
+    drawSkyBackdrop(fc,dl,cloud,hour);
+    drawTwilightTint(hour,cloud);
+    drawSunMoon(t,dl,cloud,hour);
+    if(!fogActive) {
+        if (cloudResponseMode === 'layers') drawCloudLayerVeils(dl);
+        drawClouds(t);
+        drawCloudBlurOverlay(fc, dl, cloud);
+        if (cloudResponseMode === 'veil') drawOvercastVeil(dl, cloud);
+    }
+    drawSmog(t,dl,cloud);
+    drawFog(t);
+    drawRain();
+    if(W.lightningActive&&Math.random()<.008) triggerLightning();
+    drawLightning(now);
+    drawWindowVignette();
+    updateNoise();
+}
+requestAnimationFrame(frame);
+
+let mode='live', liveTimer=null, liveBlendTimer=null;
+let _hudTimer = null;
+function setLiveMode(){
+    mode='live';
+    ['panel','fps','test-badge','hud-debug','hud','hud-tag','live-api'].forEach(id=>document.getElementById(id).style.display='none');
+    clearTimeout(_hudTimer);
+    document.getElementById('scene').style.cursor='none';
+    document.getElementById('tab-test').classList.remove('on');
+    document.getElementById('tab-back').classList.add('on');
+    setTimeout(resize,30);
+}
+function setTestMode(){
+    if(liveTimer) clearInterval(liveTimer);
+    if(liveBlendTimer) clearInterval(liveBlendTimer);
+    mode='test';
+    document.getElementById('panel').style.display='block';
+    showHud(true); // test mód — HUD trvale viditelný
+    document.getElementById('fps').style.display='block';
+    document.getElementById('test-badge').style.display='block';
+    document.getElementById('hud-debug').style.display='block';
+    document.getElementById('live-api').style.display='none';
+    document.getElementById('hud').style.display='block';
+    document.getElementById('hud-tag').style.display='block';
+    document.getElementById('scene').style.cursor='none';
+    document.getElementById('tab-test').classList.add('on');
+    document.getElementById('tab-back').classList.remove('on');
+    setTimeout(resize,30); sliderUpdate();
+}
+function switchToLive(){
+    if(liveTimer) clearInterval(liveTimer);
+    if(liveBlendTimer) clearInterval(liveBlendTimer);
+    setLiveMode();
+    setTimeout(() => showHud(false), 50); // live mód — HUD zmizí po 10s
+    // Okamžitě resetuj scénu na aktuální čas, než dorazí API odpověď
+    const h=currentLocalHour();
+    applyWeather({name:'…',temp:15,rain:0,cloud:20,wind:0,hour:h,
+        sunriseHour:SUNRISE,sunsetHour:SUNSET,isDay:h>6&&h<20,sunPower:0.5});
+    fetchAndRender();
+    liveTimer=setInterval(fetchAndRender,300000); // 5 minut místo 15
+    liveBlendTimer=setInterval(syncLiveWeatherFromForecast,30000);
+}
+
+// Spustit live mód ihned po načtení stránky
+switchToLive();
+
+// Automatický re-fetch při přechodu přes půlnoc
+(function scheduleMidnightRefresh(){
+    const now = new Date();
+    const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 5).getTime() - now.getTime();
+    setTimeout(()=>{
+        if(mode==='live') fetchAndRender();
+        scheduleMidnightRefresh();
+    }, msToMidnight);
+})();
+
+function showHud(persistent) {
+    const hud = document.getElementById('hud');
+    const tag = document.getElementById('hud-tag');
+    if(mode==='live') return;
+    hud.style.opacity = '1';
+    tag.style.opacity = '1';
+    clearTimeout(_hudTimer);
+    _hudTimer = null;
+    if (!persistent) {
+        _hudTimer = setTimeout(() => {
+            hud.style.opacity = '0';
+            tag.style.opacity = '0';
+        }, 10000);
+    }
+}
+
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&mode==='test'){switchToLive();return;}
+    if((e.key==='t'||e.key==='T')&&mode==='live'){setTestMode();return;}
+    if(e.key==='h'||e.key==='H'){
+        if(mode==='live'){
+            const el=document.getElementById('live-api');
+            clearTimeout(_liveApiTimer);
+            el.style.display='block';
+            _liveApiTimer=setTimeout(()=>{el.style.display='none';},5000);
+        }
+        return;
+    }
+    if(e.key==='o'||e.key==='O'){
+        cloudResponseMode = cloudResponseMode === 'layers' ? 'veil' : 'layers';
+        applyWeather(W);
+        return;
+    }
+    if(mode!=='test') return;
+    const btns=[...document.querySelectorAll('.p-btn')];
+    const cur=btns.findIndex(b=>b.classList.contains('on'));
+    let next=cur;
+    if(e.key==='ArrowRight') next=(cur+1)%btns.length;
+    if(e.key==='ArrowLeft') next=(cur-1+btns.length)%btns.length;
+    if(next!==cur) btns[next].click();
+});
+
+let clickCount=0,clickTimer=null,_liveApiTimer=null;
+document.getElementById('scene').addEventListener('click',()=>{
+    clickCount++; if(clickTimer) clearTimeout(clickTimer);
+    clickTimer=setTimeout(()=>{clickCount=0;},600);
+    if(clickCount>=3){clickCount=0;if(mode==='live')setTestMode();else switchToLive();}
+});
+
+// Force cursor to hide immediately without waiting for real mouse movement
+window.addEventListener('load', () => {
+    const evt = new MouseEvent('mousemove', {bubbles: true, cancelable: true, clientX: 1, clientY: 1});
+    document.dispatchEvent(evt);
+    setTimeout(() => {
+        const evt2 = new MouseEvent('mousemove', {bubbles: true, cancelable: true, clientX: 0, clientY: 0});
+        document.dispatchEvent(evt2);
+    }, 500);
+});
+
+function computeVisualCloud(w) {
+    const cloudTotal = w.cloud ?? 0;
+    const weatherCode = w.weatherCode ?? null;
+    const hasLayerData = w.cloudLow != null;
+
+    // ECMWF vrací cloud_cover_low/mid/high jako maximální pokrytí v dané vrstvě atmosféry,
+    // ne jako příspěvek k celkové oblačnosti. Proto:
+    //   - používáme cloudTotal jako primární základ (je vždy k dispozici a přesný)
+    //   - vrstvová data jen zesilují signál při výrazné spodní oblačnosti (dobře viditelné)
+    //   - váha low je vyšší (nízké mraky jsou vizuálně dominantní)
+    const _fHigh = (w.cloudHigh ?? 0) / 100;
+    const _fMid  = (w.cloudMid  ?? 0) / 100;
+    const _fLow  = (w.cloudLow  ?? 0) / 100;
+    // midBoost: střední oblačnost (altocumulus/altostratus) vizuálně dominuje při mid > low
+    const midBoost = (hasLayerData && (w.cloudMid ?? 0) > 20 && (w.cloudMid ?? 0) > (w.cloudLow ?? 0))
+        ? clamp(((w.cloudMid ?? 0) - 20) * 0.6, 0, 25)
+        : 0;
+    // layerBoost: low vizuálně dominantní, high přispívá výrazněji než dřív
+    const layerBoost = hasLayerData
+        ? clamp(_fLow * 30 + _fMid * 18 + _fHigh * 22, 0, 40) + midBoost
+        : 0;
+    // Pokud high dominuje (>50%) a low/mid jsou nízké → cirrus pokrytí,
+    // použij high jako primární signál (plošný průsvitný závoj)
+    const highDominant = hasLayerData && (w.cloudHigh ?? 0) > 50
+        && (w.cloudLow ?? 0) < 30 && (w.cloudMid ?? 0) < 30;
+    const highSignal = highDominant
+        ? clamp((w.cloudHigh ?? 0) * 0.65, 0, 100)  // cirrus 75% → ~49 visualCloud
+        : 0;
+    const layerWeighted = hasLayerData
+        ? clamp(Math.max(cloudTotal, cloudTotal * 0.7 + layerBoost, highSignal), 0, cloudTotal + 20)
+        : cloudTotal;
+
+    let apiCloud = layerWeighted;
+    if (cloudResponseMode === 'veil') {
+        if (cloudTotal >= 90) apiCloud = Math.max(apiCloud, 88);
+        else if (cloudTotal >= 75) apiCloud = Math.max(apiCloud, cloudTotal * 0.82);
+        else if (cloudTotal >= 55) apiCloud = Math.max(apiCloud, cloudTotal * 0.68);
+        if (weatherCode === 3) apiCloud = Math.max(apiCloud, 86);
+        else if (weatherCode === 2) apiCloud = Math.max(apiCloud, 45);
+        else if (weatherCode === 1) apiCloud = Math.max(apiCloud, Math.min(cloudTotal, 35));
+    } else {
+        // weatherCode: slabý tah, ne tvrdé maximum — cloudová čísla mají přednost
+        if (weatherCode === 0) {
+            // Jasno: tvrdší cap, ale jen pokud layered není výrazně vyšší
+            apiCloud = Math.min(apiCloud, Math.max(15, layerWeighted * 0.5));
+        } else if (weatherCode === 1) {
+            // Převážně jasno: jen jemný tah dolů, neořezávat pod layered
+            apiCloud = lerp(apiCloud, Math.min(apiCloud, 42), 0.35);
+        } else if (weatherCode === 2) {
+            apiCloud = clamp(apiCloud, 25, 72);
+        } else if (weatherCode === 3 && cloudTotal >= 90) {
+            apiCloud = Math.max(apiCloud, 48);
         }
     }
 
-    requestAnimationFrame(drawRain);
+    const sunPower = w.sunPower ?? 0;
+    const clearSkyRatio = w.clearSkyRatio ?? null;
+
+    // clearSkyRatio (direct/shortwave) je nejspolehlivější fyzikální signál.
+    // Kvadratická křivka: ratio 0→cap 100, ratio 0.5→cap 75, ratio 0.8→cap 39, ratio 1.0→cap 5
+    let correctedCloud, radiationCorrection;
+    if (clearSkyRatio !== null) {
+        const cloudCap = clamp(100 - clearSkyRatio * clearSkyRatio * 95, 5, 100);
+        correctedCloud = clamp(Math.min(apiCloud, cloudCap), 0, 100);
+        radiationCorrection = apiCloud - correctedCloud;
+    } else {
+        // Noc nebo nízké záření — fallback: sunPower korekce (konzervativní)
+        const sunCorr = sunPower > 0.55
+            ? Math.pow((sunPower - 0.55) / 0.45, 1.3) * 45
+            : Math.pow(sunPower, 2.2) * 12;
+        radiationCorrection = (cloudResponseMode === 'veil' && cloudTotal >= 70)
+            ? sunPower * 8
+            : sunCorr;
+        correctedCloud = clamp(apiCloud - radiationCorrection, 0, 100);
+    }
+    const visualCloud = isFog(w) ? Math.min(correctedCloud * 0.28, 24) : correctedCloud;
+    return {layeredCloud: layerWeighted, correctedCloud, visualCloud, radiationCorrection};
 }
 
-// =========================
-// CONTROLS
-// =========================
-document.addEventListener("keydown", (e) => {
-    if (!TEST_MODE) return;
-
-    if (e.key === "ArrowRight") testIndex = (testIndex + 1) % testStates.length;
-    if (e.key === "ArrowLeft") testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-
-    render();
-});
-
-// swipe
-let startX = 0;
-
-document.addEventListener("touchstart", (e) => {
-    startX = e.touches[0].clientX;
-});
-
-document.addEventListener("touchend", (e) => {
-    if (!TEST_MODE) return;
-
-    let diff = e.changedTouches[0].clientX - startX;
-
-    if (diff > 50) testIndex = (testIndex - 1 + testStates.length) % testStates.length;
-    if (diff < -50) testIndex = (testIndex + 1) % testStates.length;
-
-    render();
-});
-
-// =========================
-// START
-// =========================
-render();
-drawRain();
-
-if (!TEST_MODE) {
-    setInterval(async () => {
-        await getWeather();
-        render();
-    }, FETCH_INTERVAL);
+function applyWeather(w){
+    W=w;
+    cloudStyleMode = w.cloudStyle || 'default';
+    const snowActive = isSnow(w);
+    const rainActive = !snowActive && ((w.precipKind === 'rain') || (w.rain ?? 0) > 0.02);
+    const newP=snowActive?'snow':rainActive?'rain':'none';
+    raining=snowActive||rainActive;
+    if(newP!==precipType){
+        // Only flush texture cache when KIND changes (snow↔rain), not intensity
+        const kindChanged = (newP==='snow')!==(precipType==='snow');
+        precipType=newP;
+        if(kindChanged) rainDropOSC={};
+        raining?initRain():(drops=[]);
+    } else if(raining&&!drops.length) initRain();
+    const {layeredCloud, correctedCloud, visualCloud, radiationCorrection} = computeVisualCloud(w);
+    // Při dešti/sněhu vynudit minimální cloudVisual → obloha musí být šedá
+    const cloudVisualFinal = (rainActive || snowActive || (w.snowfall ?? 0) > 0.05)
+        ? Math.max(visualCloud, 62)
+        : visualCloud;
+    w.cloudVisual = cloudVisualFinal;
+    _tDensity=clamp((cloudVisualFinal-4)/88,0,1);
+    // Při dešti/sněhu vždy minimálně zataženo
+    if (rainActive || snowActive || (w.snowfall ?? 0) > 0.05) _tDensity = Math.max(_tDensity, 0.72);
+    _tWind=w.wind||0;
+    // Cloud layout bucket is now managed by the frame loop (smooth easing)
+    // Debug výpočtu — vždy viditelný
+    const dbgEl2=document.getElementById('hud-debug');
+    if(dbgEl2) dbgEl2.textContent=`mode=${cloudResponseMode} cloud=${w.cloud??'?'} low=${w.cloudLow??'?'} mid=${w.cloudMid??'?'} high=${w.cloudHigh??'?'} → layered=${layeredCloud.toFixed(0)} radCorr=${radiationCorrection.toFixed(0)} vis=${visualCloud.toFixed(0)} cDens=${cDensity.toFixed(3)} code=${w.weatherCode??'?'} name=${w.name}`;
+    const liveApiEl=document.getElementById('live-api');
+    if(liveApiEl){
+        const now=new Date();
+        const ts=now.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        const _radWm2 = w.sunPower!=null?(w.sunPower*700).toFixed(0):'?';
+        const _radCorr = radiationCorrection.toFixed(1);
+        const _csr = w.clearSkyRatio!=null?w.clearSkyRatio.toFixed(2):'—';
+        const _layered = layeredCloud.toFixed(0);
+        liveApiEl.innerHTML=[
+            `<span style="opacity:.45">${ts}</span>`,
+            `☁ total <b>${w.cloud??'?'}%</b> &nbsp; low <b>${w.cloudLow??'?'}%</b> &nbsp; mid <b>${w.cloudMid??'?'}%</b> &nbsp; high <b>${w.cloudHigh??'?'}%</b>`,
+            `🌡 <b>${w.temp!=null?w.temp.toFixed(1):'?'}°C</b> &nbsp; 💧 <b>${w.rain!=null?w.rain.toFixed(2):'?'} mm/h</b> &nbsp; 💨 <b>${w.windSpeed!=null?w.windSpeed.toFixed(1):'?'} m/s</b>`,
+            `☀ <b>${_radWm2} W/m²</b> (sunP ${w.sunPower!=null?w.sunPower.toFixed(2):'?'}) &nbsp; ratio <b>${_csr}</b> &nbsp; radCorr −<b>${_radCorr}</b>`,
+            `layered <b>${_layered}</b> → vis <b>${visualCloud.toFixed(0)}</b> &nbsp; cDens <b>${cDensity.toFixed(3)}</b> &nbsp; code <b>${w.weatherCode??'?'}</b>`,
+        ].join('<br>');
+    }
+    _tStorm=isThunderstorm(w)?1:clamp(((w.rainRaw??w.rain??0)+(w.showers??0)*0.75)/7,0,.65);
+    if(_firstApply){
+        // První load — přeskočit easing, okamžitě nastavit finální hodnoty
+        cDensity=_tDensity; cWind=_tWind; cStorm=_tStorm;
+        fDensity=_tFDensity; _sRainLvl=_tRainLvl;
+        _stableRainLvl=_tRainLvl|0; _firstApply=false;
+    }
+    cDL=getDL(getRenderHour());
+    if(isFog(w)){
+        const vf=w.visibility!=null?1-clamp(w.visibility/9000,0,1):0.45;
+        const hf=w.humidity!=null?clamp((w.humidity-82)/18,0,1):0.4;
+        _tFDensity=lerp(1.15,1.85,clamp(vf*0.75+hf*0.25,0,1));
+    } else _tFDensity=0;
+    fWind=w.wind||0;
+    // rain level target for smooth drop count transitions
+    const _snowA=isSnow(w);
+    _tRainLvl=_snowA?2:rainLevel(w.rain||0);
+    if(mode!=='test') return;
+    const hr=Math.floor(w.hour??0), mn=Math.round(((w.hour??0)-hr)*60);
+    const dl=getDL(w.hour??12);
+    const tod=dl<.05?'noc':dl<.35?'soumrak':'';
+    const lvl=isSnow(w)?0:rainLevel(w.rain||0);
+    const rainDesc=['','mrholení','déšť','silný déšť','průtrž'][lvl];
+    document.getElementById('hud-name').textContent=w.name;
+    document.getElementById('hud-sub').textContent=
+        `${w.temp}°C  ·  ${String(hr).padStart(2,'0')}:${String(mn).padStart(2,'0')}`+
+        (tod?'  ·  '+tod:'')+(rainDesc?'  ·  '+rainDesc:'');
 }
+
+async function fetchAndRender(){
+    try{
+        // Paralelní fetch: ECMWF pro předpověď + standard endpoint pro current (aktuální stanice, ~15min)
+        const ecmwfUrl=`https://api.open-meteo.com/v1/ecmwf?latitude=${LAT}&longitude=${LON}`+
+            `&timezone=Europe%2FPrague&forecast_days=2`+
+            `&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,rain,showers,snowfall,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day,direct_radiation,shortwave_radiation`+
+            `&daily=sunrise,sunset`;
+        const currentUrl=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}`+
+            `&timezone=Europe%2FPrague`+
+            `&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,is_day,direct_radiation,shortwave_radiation`+
+            `&forecast_days=1`;
+
+        const [ecmwfResp, currentResp] = await Promise.all([fetch(ecmwfUrl), fetch(currentUrl)]);
+        const [payload, currentPayload] = await Promise.all([ecmwfResp.json(), currentResp.json()]);
+        const cur = currentPayload?.current ?? null;
+
+        // ECMWF vrací pouze hourly — najdeme index odpovídající aktuální hodině
+        const nowHourIdx = (function(){
+            const times = payload?.hourly?.time ?? [];
+            const nowH = currentLocalHour();
+            let best = 0, bestDiff = Infinity;
+            for (let i = 0; i < times.length; i++){
+                const h = parseHourValue(times[i]);
+                if (h == null) continue;
+                const diff = Math.abs(h - nowH);
+                if (diff < bestDiff){ bestDiff = diff; best = i; }
+            }
+            return best;
+        })();
+        const data = getHourlySourceAt(payload.hourly, nowHourIdx);
+
+        // Přepsat klíčová data aktuálními hodnotami ze stanic (current= endpoint, ~15min čerstvost)
+        if (cur) {
+            if (cur.cloud_cover != null) {
+                data.cloud_cover = cur.cloud_cover;
+                // Vrstvová data zachováme z ECMWF — jsou jediný zdroj info o typu oblačnosti.
+                // layerBoost je zastropován na max 40, takže nemůže výrazně přebít aktuální cloud_cover.
+            }
+            if (cur.weather_code      != null) data.weather_code      = cur.weather_code;
+            if (cur.rain              != null) data.rain              = cur.rain;
+            if (cur.precipitation     != null) data.precipitation     = cur.precipitation;
+            if (cur.temperature_2m    != null) data.temperature_2m    = cur.temperature_2m;
+            if (cur.wind_speed_10m    != null) data.wind_speed_10m    = cur.wind_speed_10m;
+            if (cur.wind_gusts_10m    != null) data.wind_gusts_10m    = cur.wind_gusts_10m;
+            if (cur.direct_radiation  != null) data.direct_radiation  = cur.direct_radiation;
+            if (cur.shortwave_radiation != null) data.shortwave_radiation = cur.shortwave_radiation;
+            if (cur.is_day            != null) data.is_day            = cur.is_day;
+            console.log('current= přepsalo ECMWF:', JSON.stringify({
+                cloud: cur.cloud_cover, code: cur.weather_code, rain: cur.rain,
+                temp: cur.temperature_2m, rad: cur.direct_radiation
+            }));
+        }
+
+        const sunPower=clamp((data.direct_radiation??0)/700,0,1);
+        // DEBUG — plný výpis do konzole pro diagnostiku
+        console.log('ECMWF API odpověď:', JSON.stringify({
+            idx: nowHourIdx,
+            time: payload.hourly?.time?.[nowHourIdx],
+            temp: data.temperature_2m,
+            cloud: data.cloud_cover,
+            cloudLow: data.cloud_cover_low,
+            cloudMid: data.cloud_cover_mid,
+            cloudHigh: data.cloud_cover_high,
+            rad: data.direct_radiation,
+            sunP: sunPower.toFixed(2),
+            wcode: data.weather_code,
+            rain: data.rain,
+            isDay: data.is_day
+        }));
+        if (data.cloud_cover == null) {
+            console.warn('ECMWF: cloud_cover je null — zkontroluj dostupné proměnné endpointu');
+        }
+        const anchorHour = currentLocalHour();
+        const targetSource = getNextHourlySource(payload, anchorHour);
+        liveForecast = {
+            payload,
+            anchorHour,
+            targetHour: parseHourValue(targetSource?.time) ?? anchorHour,
+            currentSource: data,
+            targetSource
+        };
+        syncLiveWeatherFromForecast();
+    }catch(e){
+        console.error('Open-Meteo fetch failed:',e);
+        // Fallback — vždy zobraz něco rozumného, i když byl '…' placeholder
+        if(!liveForecast){
+            const h=currentLocalHour();
+            applyWeather({name:'—',temp:15,rain:0,cloud:20,wind:0,hour:h,
+                sunriseHour:SUNRISE,sunsetHour:SUNSET,isDay:h>6&&h<20,sunPower:0.5});
+        }
+        // Retry za 2 minuty místo čekání na dalších 15 minut
+        setTimeout(()=>{ if(mode==='live') fetchAndRender(); }, 120000);
+    }
+}
+
+function sliderUpdate(){
+    const hour=parseFloat(document.getElementById('sl-hour').value);
+    const temp=parseInt(document.getElementById('sl-temp').value);
+    const cloud=parseInt(document.getElementById('sl-cloud').value);
+    const rain=parseFloat(document.getElementById('sl-rain').value);
+    const wind=parseFloat(document.getElementById('sl-wind').value);
+    const rawLow=parseInt(document.getElementById('sl-cloud-low').value);
+    const rawMid=parseInt(document.getElementById('sl-cloud-mid').value);
+    const rawHigh=parseInt(document.getElementById('sl-cloud-high').value);
+    const cloudLow  = rawLow  >= 0 ? rawLow  : null;
+    const cloudMid  = rawMid  >= 0 ? rawMid  : null;
+    const cloudHigh = rawHigh >= 0 ? rawHigh : null;
+    const hr=Math.floor(hour),mn=Math.round((hour-hr)*60);
+    document.getElementById('sv-hour').textContent=`${String(hr).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
+    document.getElementById('sv-temp').textContent=`${temp}°C`;
+    document.getElementById('sv-cloud').textContent=`${cloud}%`;
+    document.getElementById('sv-cloud-low').textContent=rawLow>=0?`${rawLow}%`:'auto';
+    document.getElementById('sv-cloud-mid').textContent=rawMid>=0?`${rawMid}%`:'auto';
+    document.getElementById('sv-cloud-high').textContent=rawHigh>=0?`${rawHigh}%`:'auto';
+    const lvl=rainLevel(rain);
+    const desc=['žádné','mrholení','déšť','silný déšť','průtrž'][lvl];
+    document.getElementById('sv-rain').textContent=rain>0?`${rain.toFixed(1)} · ${desc}`:'0.0';
+    document.getElementById('sv-wind').textContent=wind.toFixed(2);
+    document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('on'));
+    rainDropOSC={};
+    applyWeather({name:guessName(temp,rain,cloud),temp,rain,cloud,cloudLow,cloudMid,cloudHigh,wind,hour,cloudStyle:selectedCloudStyle || 'default'});
+}
+
+const presetsEl=document.getElementById('presets');
+PRESETS.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='p-btn'; b.textContent=p.name;
+    b.onclick=()=>{
+        document.querySelectorAll('.p-btn').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');
+        selectedCloudStyle = p.cloudStyle || 'default';
+        document.getElementById('sl-hour').value=p.hour;
+        document.getElementById('sl-temp').value=p.temp;
+        document.getElementById('sl-cloud').value=p.cloud;
+        document.getElementById('sl-cloud-low').value=p.cloudLow!=null?p.cloudLow:-1;
+        document.getElementById('sl-cloud-mid').value=p.cloudMid!=null?p.cloudMid:-1;
+        document.getElementById('sl-cloud-high').value=p.cloudHigh!=null?p.cloudHigh:-1;
+        document.getElementById('sv-cloud-low').textContent=p.cloudLow!=null?p.cloudLow+'%':'auto';
+        document.getElementById('sv-cloud-mid').textContent=p.cloudMid!=null?p.cloudMid+'%':'auto';
+        document.getElementById('sv-cloud-high').textContent=p.cloudHigh!=null?p.cloudHigh+'%':'auto';
+        document.getElementById('sl-rain').value=p.rain;
+        document.getElementById('sl-wind').value=p.wind;
+        // Aktualizuj zobrazení sliderů
+        const hr=Math.floor(p.hour),mn=Math.round((p.hour-hr)*60);
+        document.getElementById('sv-hour').textContent=`${String(hr).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
+        document.getElementById('sv-temp').textContent=`${p.temp}°C`;
+        document.getElementById('sv-cloud').textContent=`${p.cloud}%`;
+        document.getElementById('sv-rain').textContent=p.rain>0?p.rain.toFixed(1):'0.0';
+        document.getElementById('sv-wind').textContent=p.wind.toFixed(2);
+        document.querySelectorAll('.p-btn').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');
+        rainDropOSC={};
+        // Použij přesně jméno presetu — ne guessName (ta by přepsala MLHA na OBLAČNO)
+        applyWeather({name:p.name, temp:p.temp, rain:p.rain, cloud:p.cloud, cloudLow:p.cloudLow??null, cloudMid:p.cloudMid??null, cloudHigh:p.cloudHigh??null, wind:p.wind, hour:p.hour, cloudStyle:p.cloudStyle||'default'});
+    };
+    presetsEl.appendChild(b);
+});
+
+// Populate blend-preview selects with preset names
+(function(){
+    const fromEl = document.getElementById('bp-from');
+    const toEl   = document.getElementById('bp-to');
+    PRESETS.forEach((p, i) => {
+        const o1 = document.createElement('option'); o1.value = p.name; o1.textContent = p.name;
+        const o2 = document.createElement('option'); o2.value = p.name; o2.textContent = p.name;
+        fromEl.appendChild(o1);
+        toEl.appendChild(o2);
+    });
+    // Default: from first preset, to second
+    if (fromEl.options.length > 1) toEl.selectedIndex = 1;
+})();
+
+let _bpRaf = null;
+function blendPreviewPlay() {
+    if (_bpRaf) { cancelAnimationFrame(_bpRaf); _bpRaf = null; }
+    const fromName = document.getElementById('bp-from').value;
+    const toName   = document.getElementById('bp-to').value;
+    const from = PRESETS.find(p => p.name === fromName);
+    const to   = PRESETS.find(p => p.name === toName);
+    if (!from || !to) return;
+    const duration = parseFloat(document.getElementById('bp-speed').value) * 1000;
+    const bar      = document.getElementById('bp-bar');
+    const tVal     = document.getElementById('bp-t-val');
+    const playBtn  = document.getElementById('bp-play');
+    playBtn.textContent = '◼ STOP';
+    const start = performance.now();
+    function tick(now) {
+        const t = Math.min((now - start) / duration, 1);
+        const hour  = lerp(from.hour,  to.hour,  t);
+        const temp  = lerp(from.temp,  to.temp,  t);
+        const cloud = lerp(from.cloud, to.cloud, t);
+        const rain  = lerp(from.rain,  to.rain,  t);
+        const wind  = lerp(from.wind,  to.wind,  t);
+        bar.style.width = (t * 100) + '%';
+        tVal.textContent = 't=' + t.toFixed(2);
+        const style = t < 0.5 ? (from.cloudStyle || 'default') : (to.cloudStyle || 'default');
+        applyWeather({ name: t < 0.5 ? from.name : to.name,
+            temp, rain, cloud, wind, hour, cloudStyle: style });
+        if (t < 1) {
+            _bpRaf = requestAnimationFrame(tick);
+        } else {
+            _bpRaf = null;
+            playBtn.textContent = '▶ PŘEHRÁT';
+        }
+    }
+    _bpRaf = requestAnimationFrame(tick);
+}
+
+initClouds();
 </script>
 </body>
 </html>

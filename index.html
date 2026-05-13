@@ -354,7 +354,7 @@ function getTwilightInfo(hour,cloud=0) {
     return {intensity:clamp(base*cf,0,1),phase};
 }
 
-function getBG(temp, cloud, cloudHigh) {
+function getBG(temp, cloud, cloudHigh, clearSkyRatio) {
     // Čistá modrá obloha podle teploty
     let b;
     if      (temp >= 30) b = [108, 168, 255];
@@ -367,7 +367,11 @@ function getBG(temp, cloud, cloudHigh) {
     else if (temp >= -5) b = [139, 188, 248];
     else                 b = [145, 191, 245];
 
-    const t = cloud / 100;
+    // clearSkyRatio snižuje efektivní oblačnost pro výpočet barvy oblohy —
+    // při ratio=0.6 obloha vypadá světleji i když cloud=61%
+    const _csr = clearSkyRatio ?? 0;
+    const effectiveCloud = cloud * lerp(1.0, 0.25, clamp(_csr * 1.5, 0, 1));
+    const t = effectiveCloud / 100;
 
     // Cirrus tint: vysoká oblačnost (cloudHigh) přidává namodralou bílou —
     // charakteristický "mléčný" vzhled oblohy pod cirrostratusem.
@@ -634,6 +638,8 @@ function syncLiveWeatherFromForecast() {
 let cloudPuffs = [];
 let cDensity=0, cWind=0, cStorm=0, cDL=1;
 let _firstApply=true;
+let _prevWeatherCode = null;
+let _prevClearSkyRatio = null;
 let fDensity=0, fWind=0;
 // Smooth targets — applyWeather writes these; frame loop eases toward them
 let _tDensity=0, _tWind=0, _tStorm=0, _tFDensity=0, _tRainLvl=0;
@@ -675,11 +681,11 @@ function _computeCloudLayerWeights() {
     const fMid  = clamp((mid  >= 0 ? mid  : 0) / 100, 0, 1);
     const fLow  = clamp((low  >= 0 ? low  : 0) / 100, 1e-3, 1);
     // layer 0 = highest/cirrus, layer 1 = altostratus/mid, layer 2-3 = low cumulus
-    // Add small floor so even absent layers have a few representative puffs
-    const w0 = fHigh * 0.4 + 0.05;
-    const w1 = fMid  * 0.9 + 0.08;
-    const w2 = fLow  * 0.65 + 0.06;
-    const w3 = fLow  * 0.35 + 0.04;
+    // Low a mid zvýrazněny — jsou vizuálně dominantní
+    const w0 = fHigh * 0.30 + 0.04;
+    const w1 = fMid  * 1.10 + 0.10;  // mid: silnější váha
+    const w2 = fLow  * 0.85 + 0.08;  // low: výraznější přítomnost
+    const w3 = fLow  * 0.55 + 0.06;  // low-front: více popředních mraků
     const total = w0 + w1 + w2 + w3;
     _cloudLayerWeights = [w0/total, w1/total, w2/total, w3/total];
 }
@@ -697,28 +703,35 @@ function randomPuff() {
         const r = Math.random();
         layer = r < w0 ? 0 : r < w0+w1 ? 1 : r < w0+w1+w2 ? 2 : 3;
     }
-    // Y-pásma: vrstva 0 = horní část nebe (cirrus), vrstva 3 = nízko (stratocumulus)
-    const yBases  = [0.02, 0.18, 0.36, 0.54];
-    const yRanges = [0.10, 0.13, 0.14, 0.18];
+    // Y-pásma: rozšířená s překryvem — mraky nejsou v linkách
+    // Každá vrstva pokrývá větší část nebe a pásma se překrývají
+    const yBases  = [0.02, 0.12, 0.28, 0.44];
+    const yRanges = [0.18, 0.24, 0.28, 0.34];
     // Layer 0 = cirrus (high, wispy, fast-drifting); layer 3 = low cumulus (slow, dense)
-    const speedMul = [1.40, 0.85, 0.60, 0.38]; // cirrus drifts fastest at altitude
-    const scaleMul = cloudletsMode ? [0.52, 0.74, 0.98, 0.3] : [0.30, 0.60, 0.92, 1.22];
-    // Cirrus = few elongated blobs, very transparent; low cumulus = many blobs, dense
-    const blobMin  = [2, 4, 6, 7];
-    const blobVar  = [2, 4, 5, 5];
-    const opacBase = [0.22, 0.44, 0.62, 0.76]; // cirrus much more translucent
+    const speedMul = [1.40, 0.85, 0.60, 0.38];
+    const scaleMul = cloudletsMode ? [0.52, 0.74, 0.98, 0.3] : [0.30, 0.68, 1.02, 1.32]; // mid+low větší
+    // Cirrus = few elongated blobs; low cumulus = many blobs, dense
+    const blobMin  = [2, 5, 7, 8];   // mid a low: více blobů
+    const blobVar  = [2, 5, 6, 6];
+    const opacBase = [0.22, 0.52, 0.70, 0.82]; // mid a low výraznější opacity
+    // Cirrus (layer 0): very wide and flat; low cumulus (layer 3): taller puffs
+    const wMul = layer === 0 ? 1.9 : layer === 1 ? 1.3 : 1.0;
+    const hMul = layer === 0 ? 0.5 : layer === 1 ? 0.9 : 1.0;
+    // Kolosální mrak: ~18% šance, jen pro vrstvy 1-3
+    const isColossal = !cloudletsMode && layer >= 1 && Math.random() < 0.18;
     const blobCount = isMini
         ? (cloudletsMode ? (2 + Math.floor(Math.random() * 3)) : (2 + Math.floor(Math.random() * 5)))
         : (cloudletsMode ? (3 + Math.floor(Math.random() * 4)) : (blobMin[layer] + Math.floor(Math.random() * blobVar[layer])));
-    // Cirrus (layer 0): very wide and flat streaks; low cumulus (layer 3): taller puffs
-    const wMul = layer === 0 ? 1.9 : layer === 1 ? 1.2 : 1.0;
-    const hMul = layer === 0 ? 0.5 : layer === 1 ? 0.8 : 1.0;
-    const baseW = (260 + Math.random() * 380) * scaleMul[layer] * wMul;
-    const baseH = (90  + Math.random() * 100) * scaleMul[layer] * hMul;
-    const baseY = CH * (yBases[layer] + Math.random() * yRanges[layer]);
+    const colossalBlobBonus = isColossal ? (4 + Math.floor(Math.random() * 5)) : 0;
+    const colossalW  = isColossal ? lerp(1.4, 2.0, Math.random()) : 1.0;
+    const colossalH  = isColossal ? lerp(1.3, 1.8, Math.random()) : 1.0;
+    const baseW = Math.min((260 + Math.random() * 380) * scaleMul[layer] * wMul * colossalW, CW * 1.2);
+    const baseH = Math.min((90  + Math.random() * 100) * scaleMul[layer] * hMul * colossalH, CH * 0.7);
+    const yJitter = (Math.random() - 0.5) * CH * 0.12; // ±6% náhodný offset
+    const baseY = Math.max(CH * 0.01, CH * (yBases[layer] + Math.random() * yRanges[layer]) + yJitter);
     const pad   = isMini ? 24 : 80;
-    const canvW = Math.ceil(baseW * 2.6 + pad * 2);
-    const canvH = Math.ceil(baseH * 2.6 + pad * 2);
+    const canvW = Math.min(Math.ceil(baseW * 2.6 + pad * 2), 2800);
+    const canvH = Math.min(Math.ceil(baseH * 2.6 + pad * 2), 1400);
     return {
         x: Math.random() * (CW + baseW * 2) - baseW,
         y: baseY,
@@ -727,22 +740,24 @@ function randomPuff() {
         cx: canvW / 2, cy: canvH / 2,
         speed: (0.03 + Math.random() * 0.07) * speedMul[layer],
         wobblePhase: Math.random() * Math.PI * 2,
-        wobbleAmp: (8 + Math.random() * 15) * (isMini ? 1.15 : 1),
+        wobbleAmp: (20 + Math.random() * 55) * (isMini ? 1.15 : 1),
         wobbleFreq: 0.06 + Math.random() * 0.09,
         xSwayAmp: 3 + Math.random() * 9,
-        floatDrift: (Math.random() - 0.5) * (isMini ? 0.042 : 0.026),
+        floatDrift: (Math.random() - 0.5) * (isMini ? 0.065 : 0.048),
         pulseAmp: 0.03 + Math.random() * 0.07,
         pulsePhase: Math.random() * Math.PI * 2,
         flowPhase: Math.random() * Math.PI * 2,
         flowAmp: 6 + Math.random() * 16,
-        blobs: Array.from({length: blobCount}, () => ({
+        blobs: Array.from({length: blobCount + (colossalBlobBonus||0)}, () => ({
             dx: (Math.random() - 0.5) * baseW * 1.6,
             dy: (Math.random() - 0.5) * 50 * scaleMul[layer],
             rx: (55 + Math.random() * 120) * scaleMul[layer],
             ry: (32 + Math.random() * 58)  * scaleMul[layer],
         })),
-        opacity: isMini ? (cloudletsMode ? 1.0 + Math.random() * 0.12 : 0.9 + Math.random() * 0.12) : (opacBase[layer] + Math.random() * 0.22),
+        opacity: isMini ? (cloudletsMode ? 1.0 + Math.random() * 0.12 : 0.9 + Math.random() * 0.12) : (isColossal ? opacBase[layer] * 0.88 + Math.random() * 0.15 : opacBase[layer] + Math.random() * 0.22),
         isBright: isMini ? true : Math.random() < 0.35,
+        isDark: !isMini && !cloudletsMode && layer >= 1 && Math.random() < clamp((cDensity - 0.45) / 0.4, 0, 1) * (layer >= 2 ? 0.55 : 0.30),
+        darkF: 0.52 + Math.random() * 0.22, // per-puff fixní tmavost spodku (0.52–0.74)
         isMini,
         osc: null, colorKey: '',
         fadeIn: 0,   // 0..1, ramps up over ~3s after spawn
@@ -756,8 +771,6 @@ function _buildCloudOSC(p, cr, cg, cb) {
 
     const col = `${cr},${cg},${cb}`;
 
-    // Nakreslíme bloby BEZ filtru na pomocný buffer, pak ho rozblurujeme
-    // Tím se vyhneme problémům s filter+save/restore v různých prohlížečích
     const tmp = createBufferCanvas(p.canvW, p.canvH);
     const tc  = tmp.getContext('2d');
 
@@ -766,7 +779,7 @@ function _buildCloudOSC(p, cr, cg, cb) {
         const by = p.cy + b.dy;
         const r  = Math.max(b.rx, b.ry);
 
-        // Halo — velmi měkké rozplývání do okolí
+        // Halo
         const g1 = tc.createRadialGradient(bx, by, r * 0.2, bx, by, r * 2.4);
         g1.addColorStop(0,   `rgba(${col},0.82)`);
         g1.addColorStop(0.35,`rgba(${col},0.55)`);
@@ -776,7 +789,7 @@ function _buildCloudOSC(p, cr, cg, cb) {
         tc.beginPath(); tc.arc(0, 0, r, 0, Math.PI * 2);
         tc.fillStyle = g1; tc.fill(); tc.restore();
 
-        // Jádro — solidnější střed
+        // Jádro
         const g2 = tc.createRadialGradient(bx, by, 0, bx, by, r * 0.85);
         g2.addColorStop(0,   `rgba(${col},0.98)`);
         g2.addColorStop(0.5, `rgba(${col},0.85)`);
@@ -786,7 +799,7 @@ function _buildCloudOSC(p, cr, cg, cb) {
         tc.fillStyle = g2; tc.fill(); tc.restore();
     }
 
-    // Highlight
+    // Highlight nahoře
     const hiA = p.isBright ? 0.28 : 0.14;
     for (const b of p.blobs) {
         const bx = p.cx + b.dx - b.rx * 0.1;
@@ -801,11 +814,38 @@ function _buildCloudOSC(p, cr, cg, cb) {
         tc.fillStyle = gh; tc.fill(); tc.restore();
     }
 
-    // Aplikuj blur na hlavní canvas — filter nastavíme jednou před drawImage
+    // Blur
     const blurPx = IS_LOWEND ? 14 : 28;
     oc.filter = `blur(${blurPx}px)`;
     oc.drawImage(tmp, 0, 0);
     oc.filter = 'none';
+
+    // isDark: vertikální přechod nakreslený přes tmp PŘED blurem
+    // → gradient se rozmaže spolu s mrakem, nikdy nepřesáhne jeho tvar
+    if (p.isDark) {
+        const df = p.darkF ?? 0.62;
+        const tmp2 = createBufferCanvas(p.canvW, p.canvH);
+        const tc2  = tmp2.getContext('2d');
+        // Zkopírujeme tmp, pak přidáme gradient source-atop (jen na existující pixely)
+        tc2.drawImage(tmp, 0, 0);
+        tc2.globalCompositeOperation = 'source-atop';
+        const topG = tc2.createLinearGradient(0, 0, 0, p.canvH * 0.55);
+        topG.addColorStop(0,    `rgba(255,255,255,${(0.10 + (1 - df) * 0.12).toFixed(3)})`);
+        topG.addColorStop(0.35, `rgba(255,255,255,0.04)`);
+        topG.addColorStop(1,    `rgba(255,255,255,0)`);
+        tc2.fillStyle = topG; tc2.fillRect(0, 0, p.canvW, p.canvH);
+        const botG = tc2.createLinearGradient(0, p.canvH * 0.38, 0, p.canvH);
+        botG.addColorStop(0,   `rgba(0,0,0,0)`);
+        botG.addColorStop(0.5, `rgba(0,0,0,${(df * 0.28).toFixed(3)})`);
+        botG.addColorStop(1,   `rgba(0,0,0,${(df * 0.48).toFixed(3)})`);
+        tc2.fillStyle = botG; tc2.fillRect(0, 0, p.canvW, p.canvH);
+        tc2.globalCompositeOperation = 'source-over';
+        // Blur tmp2 (s gradientem) na hlavní canvas
+        oc.clearRect(0, 0, p.canvW, p.canvH);
+        oc.filter = `blur(${blurPx}px)`;
+        oc.drawImage(tmp2, 0, 0);
+        oc.filter = 'none';
+    }
 
     p.osc = osc;
     p.colorKey = _ck(cr, cg, cb);
@@ -859,9 +899,19 @@ function drawClouds(t) {
     // Partly-cloudy sun brightness: push cloud colour toward bright white
     const sunnyPartialBoost = clamp((cDL - 0.68) / 0.32, 0, 1) * clamp((0.52 - cDensity) / 0.42, 0, 1);
     if (sunnyPartialBoost > 0) {
-        cr = Math.round(lerp(cr, 255, sunnyPartialBoost * 0.55));
-        cg = Math.round(lerp(cg, 255, sunnyPartialBoost * 0.52));
-        cb = Math.round(lerp(cb, 252, sunnyPartialBoost * 0.48));
+        cr = Math.round(lerp(cr, 255, sunnyPartialBoost * 0.38));
+        cg = Math.round(lerp(cg, 255, sunnyPartialBoost * 0.35));
+        cb = Math.round(lerp(cb, 252, sunnyPartialBoost * 0.32));
+    }
+    // Při vysoké rawCloud (API oblačnosti) přidat šedý podtón i při polojasnu —
+    // mraky mají tmavší jádra i když slunce prosvítá
+    const rawCloudFactor = clamp(((W.cloud ?? 0) - 40) / 55, 0, 1);
+    const csr = W.clearSkyRatio ?? 0;
+    const greyTone = rawCloudFactor * lerp(0.28, 0.0, csr); // při ratio=1 žádný šedý tón
+    if (greyTone > 0) {
+        cr = Math.round(lerp(cr, 155, greyTone));
+        cg = Math.round(lerp(cg, 160, greyTone));
+        cb = Math.round(lerp(cb, 168, greyTone));
     }
     const currentKey = _ck(cr, cg, cb);
 
@@ -914,9 +964,17 @@ function drawClouds(t) {
             Object.assign(p, np); continue;
         }
 
-        // Rebuild texture only when colour/density changes — not every frame
-        if (!p.osc || p.colorKey !== currentKey) {
-            _buildCloudOSC(p, cr, cg, cb);
+        // isDark mraky — tmavší základní barva, vertikální gradient řeší _buildCloudOSC
+        let _cr = cr, _cg = cg, _cb = cb;
+        if (p.isDark) {
+            _cr = Math.round(cr * 0.72);
+            _cg = Math.round(cg * 0.74);
+            _cb = Math.round(cb * 0.78);
+        }
+        const _pKey = p.isDark ? currentKey + 'd' + Math.round((p.darkF ?? 0.62) * 10) : currentKey;
+        if (!p.osc || p.colorKey !== _pKey) {
+            _buildCloudOSC(p, _cr, _cg, _cb);
+            p.colorKey = _pKey;
         }
 
         // halfWidth: polojasno = kompaktní shluky s modrými mezerami, zataženo = pokryv
@@ -982,8 +1040,11 @@ function drawClouds(t) {
 // ── CLOUD BLUR OVERLAY ────────────────────────────────────────────────────────
 // Při vysoké oblačnosti přikryje ostré okraje mraků a sjednotí je s oblohou.
 // Funguje jako softbox: průhledný při nízkém cDensity, plný při cDensity→1.
-function drawCloudBlurOverlay(fc, dl, cloud) {
-    const t = clamp((cDensity - 0.15) / 0.45, 0, 1);
+function drawCloudBlurOverlay(fc, dl, cloud, clearSkyRatio) {
+    // clearSkyRatio snižuje intenzitu blur overlaye — světlé mraky na světlé obloze
+    const _csrOverlay = clearSkyRatio ?? 0;
+    const overlayScale = lerp(1.0, 0.2, clamp(_csrOverlay * 1.6, 0, 1));
+    const t = clamp((cDensity - 0.15) / 0.45, 0, 1) * overlayScale;
     if (t < 0.01) return;
 
     // Při dešti/bouři ztmavit víc — base barva musí sledovat dl (noc/soumrak)
@@ -1015,7 +1076,10 @@ function drawCloudLayerVeils(dl) {
     const high = W.cloudHigh ?? 0;
     if (low < 2 && mid < 2 && high < 2) return;
 
-    const dayLift = lerp(0.55, 1, dl);
+    // clearSkyRatio snižuje intenzitu veilů — při polojasnu nejsou plné závoje
+    const _csrVeil = W.clearSkyRatio ?? 0;
+    const veilScale = lerp(1.0, 0.25, clamp(_csrVeil * 1.8, 0, 1));
+    const dayLift = lerp(0.55, 1, dl) * veilScale;
 
     // ── HIGH (cirrus) ────────────────────────────────────────────────────────
     // Cirrus je průsvitný — jen jemný nádech v úplném vrcholu nebe.
@@ -1462,9 +1526,9 @@ function frame(now){
     }
     if(!W.name) return;
     // Ease weather visual vars toward their targets (~4s at 60fps = k≈0.012)
-    const _k = 1 - Math.pow(0.012, dt / 1000);
+    const _k = 1 - Math.pow(0.004, dt / 1000);
     const prevDensityBucket = (cloudStyleMode === 'cloudlets' ? 10 : 0) + (cDensity < 0.18 ? 0 : cDensity < 0.5 ? 1 : cDensity < 0.78 ? 2 : 3);
-    cDensity  = lerp(cDensity,  _tDensity,  _k);
+    cDensity  = Math.abs(_tDensity - cDensity) < 0.008 ? _tDensity : lerp(cDensity, _tDensity, _k);
     cWind     = lerp(cWind,     _tWind,     _k);
     cStorm    = lerp(cStorm,    _tStorm,    _k);
     fDensity  = lerp(fDensity,  _tFDensity, _k);
@@ -1478,7 +1542,7 @@ function frame(now){
     cDL = dl;
     const rawCloud = W.cloud ?? cloud; // plná oblačnost pro barvu oblohy
     const fogActive = isFog(W);
-    let bc=getBG(W.temp||15, rawCloud, W.cloudHigh ?? 0);
+    let bc=getBG(W.temp||15, rawCloud, W.cloudHigh ?? 0, W.clearSkyRatio ?? null);
     if(isSnow(W)) bc=[Math.round(bc[0]*.96),Math.round(bc[1]*.97),Math.round(bc[2]*.99)];
     // Při dešti/mrholení: potlačit modrou → obloha šedne bez ohledu na nízké cloudTotal
     if(raining) {
@@ -1493,13 +1557,13 @@ function frame(now){
     if(!fogActive) {
         if (cloudResponseMode === 'layers') drawCloudLayerVeils(dl);
         drawClouds(t);
-        drawCloudBlurOverlay(fc, dl, cloud);
+        drawCloudBlurOverlay(fc, dl, cloud, W.clearSkyRatio ?? 0);
         if (cloudResponseMode === 'veil') drawOvercastVeil(dl, cloud);
     }
     drawSmog(t,dl,cloud);
     drawFog(t);
     drawRain();
-    if(W.lightningActive&&Math.random()<.008) triggerLightning();
+    if((W.lightningActive||cStorm>0.85)&&Math.random()<.008) triggerLightning();
     drawLightning(now);
     drawWindowVignette();
     updateNoise();
@@ -1671,7 +1735,9 @@ function computeVisualCloud(w) {
         } else if (weatherCode === 2) {
             apiCloud = clamp(apiCloud, 25, 72);
         } else if (weatherCode === 3 && cloudTotal >= 90) {
-            apiCloud = Math.max(apiCloud, 48);
+            // Neaplikovat minimum pokud clearSkyRatio říká že slunce prosvítá
+            const _csr = w.clearSkyRatio ?? 0;
+            if (_csr < 0.35) apiCloud = Math.max(apiCloud, 48);
         }
     }
 
@@ -1679,20 +1745,33 @@ function computeVisualCloud(w) {
     const clearSkyRatio = w.clearSkyRatio ?? null;
 
     // clearSkyRatio (direct/shortwave) je nejspolehlivější fyzikální signál.
-    // Kvadratická křivka: ratio 0→cap 100, ratio 0.5→cap 75, ratio 0.8→cap 39, ratio 1.0→cap 5
+    // ALE: cirrus (high vrstva) propouští záření ale vizuálně zakrývá oblohu.
+    // Cirrus situace = vysoké cloudTotal + vysoké záření + dominantní high vrstva NEBO
+    //                  cloudTotal>=80 + ratio>0.45 (záření prosvítá přes husté pokrytí = cirrus)
+    const highVal = w.cloudHigh ?? 0;
+    const lowVal  = w.cloudLow  ?? 0;
+    const midVal  = w.cloudMid  ?? 0;
+    const highDomLayer = hasLayerData && highVal > 60 && lowVal < 35 && midVal < 25;
+    const highDomSignal = cloudTotal >= 80 && (clearSkyRatio ?? 0) > 0.45 && lowVal < 35;
+    const highDom = highDomLayer || highDomSignal;
+    const cirrusStr = highDomLayer
+        ? clamp((highVal - 60) / 40, 0, 1)
+        : clamp((cloudTotal - 80) / 20, 0, 1) * clamp(((clearSkyRatio ?? 0) - 0.45) / 0.4, 0, 1);
+    const cirrusRadSuppression = highDom ? cirrusStr * 0.88 : 0;
+
     let correctedCloud, radiationCorrection;
     if (clearSkyRatio !== null) {
-        const cloudCap = clamp(100 - clearSkyRatio * clearSkyRatio * 95, 5, 100);
-        correctedCloud = clamp(Math.min(apiCloud, cloudCap), 0, 100);
+        const cloudCap = clamp(100 - Math.pow(clearSkyRatio, 0.5) * 90, 5, 100);
+        const effectiveCap = lerp(cloudCap, apiCloud, cirrusRadSuppression);
+        correctedCloud = clamp(Math.min(apiCloud, effectiveCap), 0, 100);
         radiationCorrection = apiCloud - correctedCloud;
     } else {
-        // Noc nebo nízké záření — fallback: sunPower korekce (konzervativní)
         const sunCorr = sunPower > 0.55
             ? Math.pow((sunPower - 0.55) / 0.45, 1.3) * 45
             : Math.pow(sunPower, 2.2) * 12;
         radiationCorrection = (cloudResponseMode === 'veil' && cloudTotal >= 70)
             ? sunPower * 8
-            : sunCorr;
+            : sunCorr * (1 - cirrusRadSuppression);
         correctedCloud = clamp(apiCloud - radiationCorrection, 0, 100);
     }
     const visualCloud = isFog(w) ? Math.min(correctedCloud * 0.28, 24) : correctedCloud;
@@ -1716,13 +1795,33 @@ function applyWeather(w){
     const {layeredCloud, correctedCloud, visualCloud, radiationCorrection} = computeVisualCloud(w);
     // Při dešti/sněhu vynudit minimální cloudVisual → obloha musí být šedá
     const cloudVisualFinal = (rainActive || snowActive || (w.snowfall ?? 0) > 0.05)
-        ? Math.max(visualCloud, 62)
+        ? Math.max(visualCloud, lerp(60, 16, clamp((w.clearSkyRatio ?? 0) * 1.8, 0, 1)))
         : visualCloud;
     w.cloudVisual = cloudVisualFinal;
-    _tDensity=clamp((cloudVisualFinal-4)/88,0,1);
-    // Při dešti/sněhu vždy minimálně zataženo
-    if (rainActive || snowActive || (w.snowfall ?? 0) > 0.05) _tDensity = Math.max(_tDensity, 0.72);
+    _tDensity=clamp(Math.round((cloudVisualFinal-4)/88*100)/100,0,1);
+    // Při dešti/sněhu minimálně zataženo — ale clearSkyRatio může snížit minimum
+    // (slabý déšť/mrholení při polojasnu nemá vynutit tmavou oblohu)
+    if (rainActive || snowActive || (w.snowfall ?? 0) > 0.05) {
+        const _csr = w.clearSkyRatio ?? 0;
+        const _rainMin = lerp(0.65, 0.18, clamp(_csr * 1.8, 0, 1));
+        _tDensity = Math.max(_tDensity, _rainMin);
+    }
     _tWind=w.wind||0;
+
+    // Detekce výrazné změny počasí → přeskočit easing, okamžitě reagovat
+    const _curCode = w.weatherCode ?? null;
+    const _curRatio = w.clearSkyRatio ?? null;
+    const _codeCleared = (_prevWeatherCode >= 3) && (_curCode <= 2);  // zataženo→polojasno
+    const _codeOvercast = (_prevWeatherCode <= 2) && (_curCode >= 3); // polojasno→zataženo
+    const _ratioJump = _curRatio !== null && _prevClearSkyRatio !== null
+        && Math.abs(_curRatio - _prevClearSkyRatio) > 0.25; // výrazná změna záření
+    if (!_firstApply && (_codeCleared || _codeOvercast || _ratioJump)) {
+        // Snap na ~60% cesty k targetu — okamžitá reakce ale ne tvrdý skok
+        cDensity = lerp(cDensity, _tDensity, 0.6);
+        console.log(`Počasí: přechod detekován (code ${_prevWeatherCode}→${_curCode}, ratio ${_prevClearSkyRatio?.toFixed(2)}→${_curRatio?.toFixed(2)})`);
+    }
+    _prevWeatherCode = _curCode;
+    _prevClearSkyRatio = _curRatio;
     // Cloud layout bucket is now managed by the frame loop (smooth easing)
     // Debug výpočtu — vždy viditelný
     const dbgEl2=document.getElementById('hud-debug');
@@ -1737,10 +1836,10 @@ function applyWeather(w){
         const _layered = layeredCloud.toFixed(0);
         liveApiEl.innerHTML=[
             `<span style="opacity:.45">${ts}</span>`,
-            `☁ total <b>${w.cloud??'?'}%</b> &nbsp; low <b>${w.cloudLow??'?'}%</b> &nbsp; mid <b>${w.cloudMid??'?'}%</b> &nbsp; high <b>${w.cloudHigh??'?'}%</b>`,
+            `☁ total <b>${w.cloud!=null?Math.round(w.cloud):'?'}%</b> &nbsp; low <b>${w.cloudLow!=null?Math.round(w.cloudLow):'?'}%</b> &nbsp; mid <b>${w.cloudMid!=null?Math.round(w.cloudMid):'?'}%</b> &nbsp; high <b>${w.cloudHigh!=null?Math.round(w.cloudHigh):'?'}%</b>`,
             `🌡 <b>${w.temp!=null?w.temp.toFixed(1):'?'}°C</b> &nbsp; 💧 <b>${w.rain!=null?w.rain.toFixed(2):'?'} mm/h</b> &nbsp; 💨 <b>${w.windSpeed!=null?w.windSpeed.toFixed(1):'?'} m/s</b>`,
             `☀ <b>${_radWm2} W/m²</b> (sunP ${w.sunPower!=null?w.sunPower.toFixed(2):'?'}) &nbsp; ratio <b>${_csr}</b> &nbsp; radCorr −<b>${_radCorr}</b>`,
-            `layered <b>${_layered}</b> → vis <b>${visualCloud.toFixed(0)}</b> &nbsp; cDens <b>${cDensity.toFixed(3)}</b> &nbsp; code <b>${w.weatherCode??'?'}</b>`,
+            `layered <b>${_layered}</b> → vis <b>${visualCloud.toFixed(0)}</b> &nbsp; cDens <b>${cDensity.toFixed(3)}</b> → <b>${_tDensity.toFixed(3)}</b> &nbsp; code <b>${w.weatherCode??'?'}</b>`,
         ].join('<br>');
     }
     _tStorm=isThunderstorm(w)?1:clamp(((w.rainRaw??w.rain??0)+(w.showers??0)*0.75)/7,0,.65);
@@ -1892,7 +1991,8 @@ function sliderUpdate(){
     document.getElementById('sv-wind').textContent=wind.toFixed(2);
     document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('on'));
     rainDropOSC={};
-    applyWeather({name:guessName(temp,rain,cloud),temp,rain,cloud,cloudLow,cloudMid,cloudHigh,wind,hour,cloudStyle:selectedCloudStyle || 'default'});
+    const _isThunder = rain > 5.0 && cloud > 70;
+    applyWeather({name:guessName(temp,rain,cloud),temp,rain,cloud,cloudLow,cloudMid,cloudHigh,wind,hour,cloudStyle:selectedCloudStyle||'default',thunderstorm:_isThunder,lightningActive:_isThunder,weatherCode:_isThunder?95:undefined});
 }
 
 const presetsEl=document.getElementById('presets');
